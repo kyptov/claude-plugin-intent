@@ -163,24 +163,29 @@ resolves it to whatever the cockpit is called *at report time*:
 between. The run's OWN name is safe and needs no such treatment — it is born explicit (`claude -n`),
 which the titler skips. Only a name poked in from outside gets clobbered.
 
-`SENT=unconfirmed` means the pane did not show the `/deliver` line after the hand-off. Do not retype
-it by hand — the same script owns the recovery:
+**`SENT=yes` is final — do not follow it with a `--resend`.** The script reads it off the run's own
+transcript (the `/deliver <plan>` turn was *submitted*, not just typed onto the pane), and it has
+already retried both measured hand-off failures — a held-message box, an eaten Enter — before it
+answers. A resend after every launch was the ritual the old pane-grep forced (25 of 106 launches in
+the week of 2026-09-15); it is no longer needed.
+
+`SENT=unconfirmed` means the transcript still showed no plan after those retries. Do not retype it by
+hand — the same script owns the recovery:
 
 ```sh
 "${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/launch-run.sh --resend <plan-path>
 ```
 
-It touches no worktree and creates no session: it finds the run, answers a held-message box, and —
-this is the part hand-typing gets wrong — presses **Enter alone** when the line is already sitting
-*unsent* in the input box, instead of typing a second `/deliver` that queues a duplicate. Idempotent,
-so running it twice is safe. Exit `72` means the session is gone (the run is dead, not stuck —
-dispatch it again); `73` means still unconfirmed after the retry, so read the pane it printed.
+It touches no worktree and creates no session: it checks the run's transcript first (already holding
+its plan → it types nothing), otherwise answers a held-message box, and — this is the part
+hand-typing gets wrong — presses **Enter alone** when the line is already sitting *unsent* in the
+input box, instead of typing a second `/deliver` that queues a duplicate. Idempotent, so running it
+twice is safe. Exit `72` means the session is gone (the run is dead, not stuck — dispatch it again);
+`73` means still unconfirmed after the retry, so read the pane it printed.
 
-Use it on `SENT=unconfirmed`, and on a `STALLED … was its plan ever sent?` line from the watcher.
-**`SENT=yes` can also lie** — the idle subscription has eaten the Enter before now — so a run that
-never reports `DELIVERED` and shows no commits is a `--resend` candidate, not a mystery. A wave that
-is launched but never sent is a wave that quietly did not run, so never report "started" on
-`unconfirmed`.
+Use it on `SENT=unconfirmed`, and on a `STALLED … was its plan ever sent?` line from the watcher —
+never as a reflex after `SENT=yes`. A wave that is launched but never sent is a wave that quietly did
+not run, so never report "started" on `unconfirmed`.
 
 What the script pins, and why (so nobody "simplifies" it):
 
@@ -379,7 +384,7 @@ the baton gets dropped silently. All three of these are measured, not hypothetic
 
 | Seam | How it fails | What you do |
 |---|---|---|
-| dispatch → run | `SENT=yes` while the Enter was eaten, so the run sits at an empty prompt holding no plan | the branch has no commits and the watcher says `up and idle, waiting for its plan` / `STALLED … was its plan ever sent?` → `launch-run.sh --resend <plan>` (§3) |
+| dispatch → run | the Enter was eaten, so the run sat at an empty prompt holding no plan while the old pane-grep said `SENT=yes` | fixed at the source: `SENT` now comes from the run's transcript, after the script's own retry (§3). On `SENT=unconfirmed`, or a watcher `STALLED … was its plan ever sent?` → `launch-run.sh --resend <plan>` |
 | run → cockpit | the run finished, but its cockpit had been **auto-re-titled** since dispatch, so the `cockpit:` name it was handed no longer resolved | fixed at the source: `cockpit-addr.sh` resolves the address from the cockpit's sessionId at send time (§3). If you still see a "couldn't find its cockpit" line, or a *stranger* session forwards you an orphaned `DELIVERED`, the run is fine — read `<worktree>/.claude/deliver-state/<slug>/verdict` and land on it |
 | run → cockpit | the run finished but its `DELIVERED` message was **held** for approval and never arrived | read the pane: `tmux -L impl-<proj> capture-pane -p -t impl-<proj>-<slug> \| tail -30`. **A `DELIVERED … gates: green` line sitting in that pane IS the verdict** — it was produced by the run, and a held message is a delivery failure, not a missing judgement. Land on it |
 | cockpit → land | nobody invokes `/land`, and a finished branch waits | `Handoff: both` means you land it. `UNLANDED` from the watcher after a verdict is your cue, not the operator's |

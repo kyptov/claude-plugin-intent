@@ -21,6 +21,9 @@
 # cannot), and a pane check. Prints a machine-readable summary on the last lines:
 #   WT=<path> BRANCH=<wt/slug> SOCK=<impl-proj> SESSION=<impl-proj-slug> NAME=<tag-hex · impl slug>
 #   COCKPIT_PID=<pid> SENT=yes|unconfirmed
+# SENT=yes is read off the run's own transcript (the plan was submitted, not merely typed), and the
+# launch already retries the two measured hand-off failures before it answers — so SENT=yes is final
+# and needs no follow-up --resend.
 #
 # It also drops a dispatch record at $CLAUDE_CONFIG_DIR/dispatch-runs/<munged worktree path> holding
 # the cockpit's sessionId/pid/key. That, not the `cockpit: <name>` typed onto the pane, is the run's
@@ -224,32 +227,59 @@ PY
   parent=$want
 }
 
-# Read the pane and decide whether the run is actually holding its plan. Sets $pane and $sent.
-#
-# Two failure shapes, both measured, and a naive `grep deliver` cannot tell either from success:
+# Did the run SUBMIT its plan? The proof is the run's own transcript, not the pane: a submitted
+# `/deliver <plan>` is written there as a user turn carrying `<command-args><plan>`, and nothing else
+# writes that. The pane cannot tell — a line typed but never submitted reads exactly like a sent one,
+# which is how the old `grep deliver` on the pane printed SENT=yes for runs sitting at an empty
+# prompt, and why every launch in the week of 2026-09-15 ended in a hand-run --resend (25 of 106).
+# The transcript is found through the run's own registry record (cwd == worktree), so a transcript
+# left behind by an earlier run of the same slug can never vouch for this one.
+plan_submitted() {
+  run_rp=$(cd "$wt" 2>/dev/null && pwd -P) || return 1
+  tdir="$profile/projects/$(printf '%s' "$run_rp" | sed 's#[^A-Za-z0-9]#-#g')"
+  for rec in $(grep -ls "\"cwd\":\"$run_rp\"" "$profile"/sessions/*.json 2>/dev/null); do
+    sid=$(jq -r '.sessionId // empty' "$rec" 2>/dev/null)
+    [ -n "$sid" ] || continue
+    grep -qsF "<command-args>$plan_rel" "$tdir/$sid.jsonl" && return 0
+  done
+  return 1
+}
+
+wait_submitted() {
+  for _ in $(seq "$1"); do
+    plan_submitted && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Settle the hand-off: wait for the transcript to show the plan, and if it does not, clear the two
+# measured ways a typed line fails to submit, then wait again. Sets $pane and $sent.
 #   1. a "held message / review it below" box swallows the line — answer it with Down Enter;
 #   2. the Enter itself is eaten (the idle subscription, or a box that appeared between the text and
-#      the newline), leaving the command sitting UNSENT in the input box. That is why SENT=yes has
-#      lied about a dispatched run before. Press Enter on its own rather than retyping the line,
-#      which would queue a second /deliver.
+#      the newline), leaving the command sitting UNSENT in the input box. Press Enter on its own
+#      rather than retyping the line, which would queue a second /deliver.
+# SENT=yes therefore means submitted, not "visible on the pane" — the cockpit acts on it as final.
 confirm_pane() {
-  pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null)
-  if printf '%s' "$pane" | grep -qi "held message\|review it below"; then
-    tmux -L "$sock" send-keys -t "$session" Down Enter; sleep 2
-    pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null)
-  fi
-  if printf '%s' "$pane" | tail -6 | grep -q '/deliver'; then
-    tmux -L "$sock" send-keys -t "$session" Enter; sleep 3
-    pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null)
-  fi
   sent=unconfirmed
-  printf '%s' "$pane" | grep -q "deliver" && sent=yes
+  if ! wait_submitted 15; then
+    pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null)
+    if printf '%s' "$pane" | grep -qi "held message\|review it below"; then
+      echo "==> plan not submitted — answering a held-message box" >&2
+      tmux -L "$sock" send-keys -t "$session" Down Enter
+    elif printf '%s' "$pane" | tail -6 | grep -q '/deliver'; then
+      echo "==> plan typed but not submitted — pressing Enter" >&2
+      tmux -L "$sock" send-keys -t "$session" Enter
+    fi
+    wait_submitted 20 || { pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null); return 0; }
+  fi
+  sent=yes
+  pane=$(tmux -L "$sock" capture-pane -p -t "$session" 2>/dev/null)
   return 0
 }
 
 send_plan() {
   tmux -L "$sock" send-keys -t "$session" "/deliver $plan_rel   cockpit: $parent" Enter
-  sleep 4
   confirm_pane
 }
 
@@ -273,7 +303,10 @@ if [ "$mode" = resend ]; then
   # Match the PLAN, never "cockpit: $parent": the cockpit may have been re-titled since launch, and
   # then an exact-name test finds nothing on a pane that is in fact holding its plan — and types a
   # second /deliver line onto a working run.
-  if printf '%s' "$pane" | grep -qF "/deliver $plan_rel"; then
+  if plan_submitted; then
+    echo "==> the run's transcript already holds its plan — nothing to resend"
+    sent=yes
+  elif printf '%s' "$pane" | grep -qF "/deliver $plan_rel"; then
     # The line is on screen — which does not mean it was submitted. Let confirm_pane settle it
     # rather than typing a second copy.
     echo "==> plan line already on the pane — confirming it was submitted, not just typed"
