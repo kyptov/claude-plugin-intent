@@ -1,7 +1,7 @@
 ---
 name: intent
-description: Phase 1 of the two-phase workflow — interview the operator to pin down what they want, decide every technical detail yourself, and write an executable plan contract (path per .claude/workflow.md) for /deliver to run unattended. Use for any new idea, feature, rough direction, "is this a good idea?", or a debt-pool item that will become implementation work. Not for executing a plan (/deliver), merging a finished worktree (/land), or questions answerable by reading code.
-argument-hint: [rough idea, or a path to an existing plan/spec to turn into a contract]
+description: Phase 1 of the two-phase workflow — interview the operator to pin down what they want, decide every technical detail yourself, and write an executable plan contract (path per .claude/workflow.md) for /deliver to run unattended. Use for any new idea, feature, rough direction, "is this a good idea?", or a debt-pool item that will become implementation work; `--quick` skips the interview for a small visible tweak. Not for executing a plan (/deliver), merging a finished worktree (/land), or questions answerable by reading code.
+argument-hint: [--quick] [rough idea, or a path to an existing plan/spec to turn into a contract]
 ---
 
 # Interview → contract
@@ -29,6 +29,40 @@ dialog too many, so the decision lives in §6 and nowhere else.
 **What replaces it as the review is §5's spoken brief.** The plan is written for an agent; the brief
 is written for the operator, in the reply, in plain words. That is where a misunderstood interview
 gets caught — so a thin brief is now a real failure, not a stylistic one.
+
+## 0a. `--quick` — the lane for small, visible tweaks
+
+When `$ARGUMENTS` starts with `--quick`, the operator is saying: *this is small, I have said all
+there is to say, build it.* About half of all intents are one-liners like "fix shadow clipping (left
+side)" or "buttons should stay to the right when load opens"; through the full interview each still
+cost two or more questions and a median 44 minutes to land, and short asks reached dispatch *slower*
+than detailed ones (19 vs 12.5 min), because the questions were about what the one-liner left out.
+
+**First decide whether it qualifies — by reading the code, not by asking.** It does only if all hold:
+
+- the change is visible behaviour or presentation in one area — layout, styling, copy, a control's
+  placement or default, a small client-side rule;
+- one slice, roughly three files, in one package;
+- no schema or migration, no API route or contract, no change to what a role can see, no action on
+  data that exists today, no new dependency.
+
+**If it does not qualify, say so in one sentence, naming the rule it breaks, and run the normal
+interview from §1.** Never quietly shrink a real feature to fit the lane.
+
+**If it qualifies, the rest of this skill changes in four places:**
+
+1. **No interview (§1).** Resolve an ambiguity by picking the reading that matches how the product
+   already does the same thing elsewhere — the operator's "same as in Loads" is usually implicit — and
+   record each such pick under `## Agent's calls` with what it was chosen over.
+2. **§3 is unchanged in form.** The full template, every section, and the plan-check script must pass;
+   the plan is just short — one slice, the operator's words verbatim under `## Your calls`, and only
+   the canon anchors that actually cover the touched files.
+3. **§5's brief shrinks to one or two sentences:** what will look or act differently, and the one
+   call you made that they might not have.
+4. **§6 asks nothing: `--quick` is the approval.** Set `## Handoff` to `both`, commit the plan (§6),
+   and invoke `/dispatch` in the same turn — the brief goes in that same reply. The one exception: if
+   reading the code turned up two plausible readings that would *look* different to the user, ask a
+   single question that offers both readings as its options; the answer is the approval.
 
 ---
 
@@ -174,6 +208,20 @@ as an override — fold it in, exactly as §1 says. `## Handoff` still accepts a
 Write the answer into the plan's `## Handoff` **before** you do anything else with it — `both` for
 Proceed, `nothing` for Just save (the plan-check script's `--set-handoff <value>` does exactly this). That one line is the recovery path: if this turn dies, `/dispatch`
 reads the answer from the file instead of asking the operator to decide twice.
+
+**Then commit the plan — that file and nothing else — on the trunk in the main checkout**, whichever
+option was chosen:
+
+```sh
+git add -- <plan-path> && git commit -m "<the project's commit style>: plan <what it builds>" -- <plan-path>
+```
+
+A worktree branches from the trunk, so an uncommitted plan is not in the run's checkout at all, and
+the dispatch preflight blocks on the dirty main checkout (`13`) — measured ~7 times in one week, each
+one a round trip to commit by hand. The pathspec on both commands is the point: other cockpits share
+this checkout and may have their own files open, and `git add -A` or a bare `git commit` would sweep
+those into your commit. Do not push; `/land` pushes the trunk. If the plan is edited again before
+dispatch (a free-text override folded in), commit it again.
 
 **Nothing else asks for approval after this**, so nothing downstream will catch a malformed plan
 either. **Run the declaration's plan-check script before you ask** — it settles, mechanically, what

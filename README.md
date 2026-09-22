@@ -56,7 +56,8 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 | Case | Guards against |
 |---|---|
 | `dispatch-arms-watcher` | a wave launched with no `watch-runs.sh --watch` armed in the same turn, or armed without the dispatching profile |
-| `intent-plan-passes-check` | a plan `plan-check.sh` would reject: missing section, template placeholder, slice without `- Files:`/`[verify]`, unmarked out-of-scope item |
+| `intent-plan-passes-check` | a plan `plan-check.sh` would reject: missing section, template placeholder, slice without `- Files:`/`[verify]`, unmarked out-of-scope item; a plan left uncommitted |
+| `intent-quick-lane` | `/intent --quick` on a one-line tweak that still interviews, asks for approval, skips the plan commit (or sweeps other files into it), or stops short of `/dispatch` |
 | `deliver-decides-alone` | `/deliver` asking the operator at a fork instead of deciding and logging it |
 | `land-on-green-verdict` | `Handoff: both` plus a green `DELIVERED`, and nobody invokes `/land` |
 | `land-holds-on-red` | the guard for the case above: a `gates: RED` verdict must not land |
