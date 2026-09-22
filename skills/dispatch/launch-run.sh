@@ -87,21 +87,21 @@ session="impl-$proj-$slug"
 # --- session naming ------------------------------------------------------------------------------
 # A session list TRUNCATES the end of a name, so the one thing that must live at the FRONT is the
 # pairing key: `<tag>-<hex>`, shared verbatim by a cockpit and every run it dispatches. Everything
-# after it is for humans, because the operator runs 3-4 cockpits at once and "which feature is this"
+# after it is for humans, because the operator may run several cockpits at once and "which feature is this"
 # has to be readable at a glance:
 #
-#   ln-de · Money board totals      <- cockpit
-#   ln-de · impl money-board-sweep  <- its run
-#   ml-6a · Consumption metering     <- another project's cockpit
-#   ml-6a · impl zero-consumption    <- its run
+#   sh-de · Checkout totals        <- cockpit
+#   sh-de · impl cart-rounding     <- its run
+#   ba-6a · Usage metering         <- another project's cockpit
+#   ba-6a · impl zero-usage        <- its run
 #
 # So the KEY is the tag, not the cockpit's name — `--mine` filters on it, and two sessions pair iff
 # their names start with the same `<tag>-<hex> `. Renaming the human half never orphans a run.
 #
 # `<tag>` is the project's own abbreviation, declared per project (`--tag`, from the workflow
-# declaration) because no rule derives both `loadnex -> ln` and `ml-billing -> ml`; the fallback is
-# the initials of a hyphenated name, else the first two letters. `<hex>` is reused from the harness's
-# own derived name (`loadnex-de` -> `de`), already unique among live sessions, so nothing new has to
+# declaration) because no rule derives every abbreviation a project wants; the fallback is the
+# initials of a hyphenated name (`billing-api -> ba`), else the first two letters (`shop -> sh`).
+# `<hex>` is reused from the harness's own derived name (`shop-de` -> `de`), already unique among live sessions, so nothing new has to
 # be generated or coordinated.
 derive_tag() {
   [ -n "$tag" ] && return 0
@@ -203,8 +203,8 @@ name_cockpit() {
   fi
   # Only NOW may the key move: every `return 0` above leaves `cockpit_id` as derive_cockpit_id read
   # it off the CURRENT name, so a refused rename still names this run with the key the cockpit
-  # actually carries. Assigning it before the refusals would tag runs `ln-de` under a cockpit still
-  # called `loadnex-de`.
+  # actually carries. Assigning it before the refusals would tag runs `sh-de` under a cockpit still
+  # called `shop-de`.
   cockpit_id="$tag-$hex"
   python3 - "$sf" "$want" <<'PY'
 import json, os, sys, tempfile

@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-intent",
-  "description": "Curtov's personal Claude Code workflow plugin, served from this local checkout.",
+  "description": "A two-phase Claude Code workflow: interview once, then implement unattended in a worktree and land one commit per feature.",
   "owner": {
     "name": "Curtov"
   },

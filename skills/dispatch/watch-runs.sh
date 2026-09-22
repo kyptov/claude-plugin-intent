@@ -35,7 +35,7 @@
 # tick. Its argument is the cockpit's PAIRING KEY, not its name: /dispatch names a cockpit
 # `<tag>-<hex> · <human title>` and each of its runs `<tag>-<hex> · impl <slug>`, so the shared
 # leading key is what makes them a pair in a list that truncates the end of every name. Pass the key
-# alone (`ln-de`) and a run belonging to another cockpit is dropped entirely.
+# alone (`sh-de`) and a run belonging to another cockpit is dropped entirely.
 # Anything not attributable to a cockpit is still reported: a session whose name does not follow the
 # pattern (hand-started), and the repo-global findings (ORPHAN, FOREIGN, a branch whose worktree is
 # gone) which belong to no session by definition.
@@ -76,8 +76,8 @@ agents=$(claude agents --json 2>/dev/null)
 now=$(date +%s)
 
 # A session's transcript path: the project dir is its cwd with every "/" turned into "-". Glob every
-# profile root ($HOME/.claude*), because this machine runs several (.claude-work, .claude-personal) and
-# a run's transcript lives under whichever profile dispatched it.
+# profile root ($HOME/.claude*), because a machine may run several profiles and a run's transcript
+# lives under whichever profile dispatched it.
 transcript_for() {
   munged=$(printf '%s' "$1" | tr '/' '-')
   for base in "$HOME"/.claude*/projects; do
@@ -86,8 +86,8 @@ transcript_for() {
 }
 
 # Is ANYTHING driving this worktree? `claude agents` cannot answer that: its registry is per profile,
-# so a wave dispatched under .claude-work is invisible to a poll under .claude-personal, and a cloud
-# session is invisible to both. So ask the OS instead — a live process whose cwd is the worktree, or a transcript
+# so a wave dispatched under one profile is invisible to a poll under another, and a cloud session is
+# invisible to both. So ask the OS instead — a live process whose cwd is the worktree, or a transcript
 # under ANY profile that moved recently. Both are true regardless of which profile is asking.
 driven() {
   lsof -a -d cwd -c claude -Fn 2>/dev/null | grep -qx "n$1" && return 0
@@ -244,8 +244,8 @@ fi
 #
 # The state file persists ACROSS invocations on purpose: re-arming the watcher while a run is still
 # BLOCKED must not fire instantly again. Only a genuinely new picture wakes the cockpit.
-# Keyed by REPO as well as cockpit. One profile dispatches for several repos (.claude-personal drives
-# ml-billing and rtu), so a key built from `--mine` alone collides: two watchers share one file, each
+# Keyed by REPO as well as cockpit. One profile can dispatch for several repos, so a key built from
+# `--mine` alone collides: two watchers share one file, each
 # reads the other's findings as its baseline, and they wake each other every tick.
 [ -n "$state_file" ] || {
   dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/dispatch-runs"

@@ -5,9 +5,6 @@ stop. **Paste the block below into a Claude session in the project that needs it
 contract, not the implementation, so the script comes out shaped by that project's own locks, trunk
 and plan template rather than copied from another repo's.
 
-`loadnex` is the reference implementation (`.claude/scripts/dispatch/preflight.sh`). Read it for shape
-if you have it; do not copy it verbatim into a project whose lock files or plan template differ.
-
 Its sibling is **`../deliver/BOOTSTRAP.md`**, which builds the three `/deliver` mechanics scripts.
 A project needs both — each skill stops on its own missing script — and they are independent, so
 paste either prompt first or both in one session.

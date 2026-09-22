@@ -5,9 +5,6 @@
 on purpose: it states the contract, not the implementation, so the scripts come out shaped by that
 project's own gates rather than copied from another repo's.
 
-`loadnex` is the reference implementation (`.claude/scripts/deliver/`). Read it for shape if you have
-it; do not copy it verbatim into a project whose gates differ.
-
 Its sibling is **`../dispatch/BOOTSTRAP.md`**, which builds the `/dispatch` preflight. A project needs
 both — each skill stops on its own missing script — and they are independent, so paste either prompt
 first or both in one session.

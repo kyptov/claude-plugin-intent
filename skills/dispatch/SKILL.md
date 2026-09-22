@@ -15,7 +15,7 @@ locations, model policy, deploy authority, canon docs. Everything project-specif
 never from assumption. If it is missing, ask the operator for the gate commands once, write the file,
 then continue — never guess gates, because a wrong gate makes every downstream green meaningless.
 
-You are the cockpit: a long-lived `--remote-control` session on the operator's always-on machine, reachable from any
+You are the cockpit: a long-lived `--remote-control` session on a machine that stays on, reachable from any
 device. **You never implement a feature yourself** — that keeps your context plan-sized, your cost
 low, and your replies fast on a phone. You interview, dispatch, report, and land.
 
@@ -115,19 +115,19 @@ COCKPIT_PID=<pid> SENT=yes|unconfirmed
 ### Session naming — a short key at the FRONT, a human name after it
 
 A session list truncates the END of a name, so the pairing key has to be first; everything after it
-is for the operator, who runs 3-4 cockpits at once and needs to see *which feature* each one is:
+is for the operator, who may run several cockpits at once and needs to see *which feature* each one is:
 
 ```
-ln-de · Money board totals       <- cockpit
-ln-de · impl money-board-sweep   <- its run
-ml-6a · Consumption metering     <- another project's cockpit
-ml-6a · impl zero-consumption    <- its run
+sh-de · Checkout totals        <- cockpit
+sh-de · impl cart-rounding     <- its run
+ba-6a · Usage metering         <- another project's cockpit
+ba-6a · impl zero-usage        <- its run
 ```
 
 **The key is `<tag>-<hex>`, not the cockpit's name.** Two sessions pair iff their names start with
 the same key, which is what `watch-runs.sh --mine <key>` filters on — so renaming a cockpit's human
 half never orphans its runs. `<tag>` is the project's two-letter abbreviation from the declaration
-(`loadnex` → `ln`, `ml-billing` → `ml`); `<hex>` is reused from the harness's own derived session
+(`shop` → `sh`, `billing-api` → `ba`); `<hex>` is reused from the harness's own derived session
 name, already unique among live sessions.
 
 **The script also names the cockpit**, because a session whose `nameSource` is merely `derived` is
@@ -176,11 +176,11 @@ not run, so never report "started" on `unconfirmed`.
 
 What the script pins, and why (so nobody "simplifies" it):
 
-- **`CLAUDE_CONFIG_DIR` named outright in the child's command, never inherited.** `claude-work` /
-  `claude-personal` are zsh functions, invisible to `sh`, `tmux`'s shell, `launchd`. An unpinned run
-  lands in `~/.claude`: different auth, different agent registry, different skills, invisible to the
-  watcher.
-- **`tmux -L impl-<project>`, a socket per project.** The operator's default server predates the
+- **`CLAUDE_CONFIG_DIR` named outright in the child's command, never inherited.** A profile chosen by
+  a shell alias or function is invisible to `sh`, `tmux`'s shell, or `launchd`, so an unpinned run can
+  land in another profile: different auth, different agent registry, different skills, invisible to
+  the watcher.
+- **`tmux -L impl-<project>`, a socket per project.** A long-lived default server can predate the
   login session, so its children come up `Not logged in`; a socket shared across projects makes one
   repo's watcher read another's healthy runs as strays. `<project>` comes from the git *common* dir,
   so a worktree computes the same socket as the main checkout.
@@ -246,7 +246,7 @@ CLAUDE_CONFIG_DIR=<profile> "${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/watch-runs.s
 ```
 
 `<profile>` is the `CLAUDE_CONFIG_DIR` the wave was launched under (§3), as a literal path. `<key>` is
-this cockpit's pairing key (`ln-de`).
+this cockpit's pairing key (`sh-de`).
 
 **The watcher ticks; you do not.** `--watch` loops on its own clock inside the script and returns only
 when the normalized finding set changes — so a wave that is merely working costs this session nothing
@@ -267,7 +267,7 @@ watcher cannot silently end the wave.
 **Do not also start a `/loop`.** One watcher per session (§0b); a `/loop` on top of `--watch` pays a
 cockpit turn per tick to learn nothing the watcher would not wake you for.
 
-**`--mine` takes the pairing KEY, not a name** (`ln-de`, the part §3 puts in front of both) — so it
+**`--mine` takes the pairing KEY, not a name** (`sh-de`, the part §3 puts in front of both) — so it
 keeps working when a cockpit's human half is renamed. It drops a run belonging to another cockpit
 outright. What it does **not** drop is anything belonging to no session: a name that does not follow
 the pattern (a hand-started run), and the repo-global findings — `ORPHAN`, `FOREIGN`, and a branch
@@ -279,10 +279,9 @@ from the main checkout, from inside a worktree, or from an unrelated repo. Two e
 creates, default `wt`).
 
 **Name the profile in that command as a literal — the `CLAUDE_CONFIG_DIR` the wave was launched
-under.** This machine runs more than one profile (`.claude-work`, `.claude-personal`, and the bare
-`~/.claude` that dispatches nothing), each with its own `claude agents` registry and transcripts, and
-only the dispatching profile's registry carries a run's status. Never write
-`${CLAUDE_CONFIG_DIR:-$HOME/.claude}`: its fallback names a profile with no runs in it. From the wrong
+under.** Each profile has its own `claude agents` registry and transcripts, and only the dispatching
+profile's registry carries a run's status. Never write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`: on a
+machine with several profiles its fallback can name one with no runs in it. From the wrong
 profile the script still asks the OS — a live process whose cwd is the worktree, or a recently moved
 transcript under any `$HOME/.claude*` root — so a healthy run reads `FOREIGN` rather than a false
 `ORPHAN`; but `RUNNING`, `BLOCKED`, `STALLED` and `UNLANDED` need the right profile.

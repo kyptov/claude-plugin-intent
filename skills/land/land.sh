@@ -27,7 +27,7 @@
 #     `kill -0 <pid>` AND the same start time, because a PID alone is reused.
 #   - a holder that is alive → poll until it releases, up to --lock-wait minutes (default 25: above
 #     a healthy worst case of attempts × gates, below "wedged"; a project whose suite is slow says
-#     so in its declaration — ml-billing's 8-16 minute suite needs 50).
+#     so in its declaration — a 15-minute suite needs about 50).
 #   - a holder that is GONE → take the lock over at once, whatever its age. Only SIGKILL (a crash, a
 #     hard-killed tool call) can leave one behind: the EXIT trap releases on TERM, INT and HUP.
 #   - a lock with no owner record for 15s → junk (its process died between mkdir and writing the
@@ -39,8 +39,8 @@
 # main checkout without pushing, local <trunk> is ahead of origin and the rebase must target local,
 # or the --ff-only step is impossible by construction. See the comment in the loop.
 #
-# NOTE for a project whose gates need a wrapper to reach its database (e.g. loadnex's `lan`, which
-# starts a loopback relay macOS otherwise blocks `node` from): invoke THIS SCRIPT under that wrapper.
+# NOTE for a project whose gates need a wrapper to reach its database (e.g. one that starts a local
+# relay to a database on the network): invoke THIS SCRIPT under that wrapper.
 # The gates and the teardown are children of this process, so wrapping the script wraps both; passing
 # a wrapped --gates string leaves the teardown unwrapped and leaks the worktree database.
 # The lock is released on EVERY exit path except 10 (it is not ours to release).

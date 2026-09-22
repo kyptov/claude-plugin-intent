@@ -5,9 +5,6 @@ behind it. There is no `ExitPlanMode` round and no human read of the plan file, 
 correctness has to be machine-checked. **Paste the block below into a Claude session in the project
 that needs it.**
 
-`loadnex` is the reference implementation (`.claude/scripts/intent/plan-check.sh`). Read it for shape
-if you have it; do not copy it verbatim into a project whose plan template differs.
-
 Siblings: **`../deliver/BOOTSTRAP.md`** (the three `/deliver` mechanics scripts) and
 **`../dispatch/BOOTSTRAP.md`** (the `/dispatch` preflight). All three are independent.
 
@@ -48,8 +45,8 @@ CHECKS — the exit code is the interface:
         - anything on an HTML-comment line — the template's append-here markers ship commented
           EXAMPLES that every plan keeps verbatim;
         - the boilerplate sections that are instructions copied into every plan and contain
-          illustrative tokens nobody replaces (in loadnex: "Where it runs", "Model policy", "Gates",
-          and "Handoff", which has its own check).
+          illustrative tokens nobody replaces (e.g. "Where it runs", "Model policy", "Gates", and
+          "Handoff", which has its own check).
   20  `## Handoff` missing, not one of the template's values, or still a placeholder (a line carrying
       `<` or `|` is a placeholder, not an answer).
   42  A slice with no `- Files:` line (that line is what /dispatch's overlap test reads) or no
@@ -61,11 +58,11 @@ CHECKS — the exit code is the interface:
       `: ` separator, whose head is the shell builtin `:`, which resolves — so a naive extraction
       makes every bogus command pass, silently.
   44  A `## Canon sections` anchor that does not resolve: the doc file is missing, or the `§n` it
-      names has no matching heading. Match the project's real heading style (in loadnex `## 12.`,
+      names has no matching heading. Match the project's real heading style (e.g. `## 12.`,
       `### 12.1`, `### 8a.`, `## Phase 15`), and accept a literal `§n` the doc uses to self-reference.
       Read only backticked tokens on bullet lines that look like a doc path — the section's prose
       backticks other things, and flagging those is noise.
-  45  An `## Out of scope` item with no routing mark (in loadnex `[boundary]` / `[gap]`). The
+  45  An `## Out of scope` item with no routing mark (e.g. `[boundary]` / `[gap]`). The
       landing step routes on the mark, so an unmarked item silently disappears.
   46  The plan's slug already has a branch or a worktree. Catch it here, not at dispatch time, which
       is after the interview is over.

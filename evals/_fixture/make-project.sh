@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared scaffold for the eval cases: a small project, `demo`, declared for the workflow skills the
-# way loadnex/rtu/ml-billing are, with one approved plan (docs/plans/duration-format.md).
+# way a real project is, with one approved plan (docs/plans/duration-format.md).
 #
 #   make-project.sh main       the workspace is the MAIN checkout, on `main` (cockpit cases)
 #   make-project.sh worktree   the workspace is the run's WORKTREE on wt/duration-format (deliver)

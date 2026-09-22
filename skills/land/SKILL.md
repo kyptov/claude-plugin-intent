@@ -76,7 +76,8 @@ A conventional commit (scopes per the project's conventions) in a temp file:
 - subject = the capability from the plan's `# <title>`, in product terms;
 - body = the `## Decisions (agent-made)` entries, one line each, so the reasoning survives in
   `git log` after the plan file is deleted;
-- footer = `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- footer = a `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer naming the model you are
+  running as.
 
 Commit the §2 sweep in the worktree first — `land.sh` refuses a dirty worktree, and the sweep must
 ride inside the squash.
@@ -101,8 +102,8 @@ script: takes `.claude/land.lock`, **waiting up to `--lock-wait` minutes (defaul
 landing holds it** — two landings overlapping in a wave is the normal case, so the second one queues
 instead of bouncing back to you; it takes a lock over at once when its owning process is gone.
 Exit 10 means the wait ran out, which is a landing that is stuck rather than busy — report it,
-do not re-run on a loop. A project whose gates are slow says so in its declaration (ml-billing's
-8-16 minute suite needs `--lock-wait 50`: three rebase attempts each re-run them). Then it squashes with
+do not re-run on a loop. A project whose gates are slow says so in its declaration (a 15-minute suite
+needs about `--lock-wait 50`: three rebase attempts each re-run it). Then it squashes with
 `reset --soft <merge-base>` + one commit (exit 24 on an empty diff — the run delivered nothing,
 report that rather than landing a no-op); then up to 3 × { `git fetch`, `git rebase origin/<trunk>`,
 gates, `merge --ff-only` in the main checkout } — **re-running the gates after every rebase**,

@@ -68,7 +68,7 @@ section, with an exit-code contract per script.
 **If the declaration names no mechanics scripts, or a named script is missing or not executable:
 STOP before implementing anything.** Say which script is absent, and point the operator at
 **`${CLAUDE_PLUGIN_ROOT}/skills/deliver/BOOTSTRAP.md`** — a paste-ready prompt that builds a project's three mechanics
-scripts against its own declaration (`loadnex` is the reference implementation). Do **not**
+scripts against its own declaration. Do **not**
 hand-assemble the gates from the declaration's table and carry on.
 
 This is a deliberate hard stop, not a missing fallback. Hand-assembled gates re-derive a conditional
@@ -165,7 +165,7 @@ Model and effort come from the declaration's model policy. Use its adversarial-r
 review stage for any slice touching an area it flags (authorization, tenancy, redaction, money…). Slices that share a file must be sequential, not parallel — check before fanning out.
 
 Keep context small: work from the plan file, not from an investigation transcript. **Read only the
-`## Canon sections` the plan names** — the companion docs are 60–77 KB each and the plan already
+`## Canon sections` the plan names** — companion docs are often long and the plan already
 says which sections govern this work; open a whole doc only when a slice contradicts the section you
 were given. Follow the `context-explorer`-first rule for anything you need to locate.
 
@@ -189,8 +189,8 @@ worktree* (§0b):
    another session may be writing the same file, and there a re-read is mandatory, not waste.
 3. **Never let a long command's output into context whole.** Pipe a full-graph test run, a
    whole-branch `git diff`, or a multi-package build through `tail` (or a `grep` for the summary
-   lines). You need the verdict, not the listing. Short output is fine as-is — `biome check` is two
-   lines.
+   lines). You need the verdict, not the listing. Short output is fine as-is — a linter summary is a
+   line or two.
 
 ## 6. Final report
 

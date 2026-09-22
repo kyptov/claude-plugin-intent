@@ -48,7 +48,7 @@ interview from §1.** Never quietly shrink a real feature to fit the lane.
 **If it qualifies, the rest of this skill changes in four places:**
 
 1. **No interview (§1).** Resolve an ambiguity by picking the reading that matches how the product
-   already does the same thing elsewhere — the operator's "same as in Loads" is usually implicit — and
+   already does the same thing elsewhere — "same as the other screen" is usually implicit — and
    record each such pick under `## Agent's calls` with what it was chosen over.
 2. **§3 is unchanged in form.** The full template, every section, and the plan-check script must pass;
    the plan is just short — one slice, the operator's words verbatim under `## Your calls`, and only
@@ -64,7 +64,7 @@ interview from §1.** Never quietly shrink a real feature to fit the lane.
 
 ## 1. How to interview
 
-The operator's own workflow note: *investigate/plan = lots of interaction, implementation = none.*
+The split: *investigate/plan = lots of interaction, implementation = none.*
 Respect the split absolutely.
 
 **Plain words, not tech words.** Say "a person confirms before it counts" — not "a human-gated state
@@ -78,8 +78,8 @@ project declaration names, and what it costs them.
 **≤4 questions per round, and only questions whose answer changes what you build.** If you can resolve
 it by reading code, reading `docs/`, or applying a documented convention, resolve it — silently.
 
-**Always leave the free-text door open.** Roughly a third of this operator's answers are free-text
-overrides, and those overrides regularly *add a requirement no option contained* — a safety check
+**Always leave the free-text door open.** Free-text answers regularly *add a requirement no option
+contained* — a safety check
 before overwriting, a validation rule, "test both approaches and show me the output first". When an
 answer arrives as free text, it is not a deviation from your options; **it is the requirement.**
 Fold it in and, if it opens a new fork, ask one more round.
@@ -90,12 +90,12 @@ defend every remaining choice against the stated intent without guessing.
 ### What to ask about (highest yield first)
 
 1. **The one thing that must be true when this is done** — write it down in the operator's words.
-2. **Where a human must stay in the loop** vs. where the system should act alone. This operator's
-   default is "do it automatically" — confirm the exceptions.
-3. **What happens to data that already exists** (backfill, misreads, duplicates, hidden rows). Almost
-   every feature here has a 90-day-history dimension, and it is usually where the real requirement is.
-4. **What is explicitly out of scope** — the operator is good at naming this ("just leave it out of
-   scope for late discussian"). Capture it verbatim; it protects the unattended run from scope creep.
+2. **Where a human must stay in the loop** vs. where the system should act alone. Default to "do it
+   automatically" and confirm the exceptions.
+3. **What happens to data that already exists** (backfill, misreads, duplicates, hidden rows). Most
+   features touch existing data somewhere, and that is usually where the real requirement is.
+4. **What is explicitly out of scope** — operators usually name this readily. Capture it verbatim; it
+   protects the unattended run from scope creep.
 
 ## 2. Decide everything else yourself
 

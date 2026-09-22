@@ -46,8 +46,8 @@ Most items are honest when filed and rot silently afterwards. Rot concentrates i
 item whose named files have been touched since it was filed.** That is where "later work already
 fixed this" lives, and it is cheap to compute:
 
-1. Read the pool. For each item, extract the file paths and symbols it names (they are dense with
-   them — that is the house style).
+1. Read the pool. For each item, extract the file paths and symbols it names (items usually name
+   them).
 2. For each item with a filing date, `git log --oneline --since=<its date> -- <its paths>`. Any hits
    make it a candidate.
 3. Rank candidates by hit count, then **promote anything sitting in the next roadmap milestone's
