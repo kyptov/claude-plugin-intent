@@ -44,6 +44,31 @@ profile — a profile copy shadows nothing and drifts silently.
   keep runtime state under `$CLAUDE_CONFIG_DIR/dispatch-runs/`. The watcher's state file is keyed
   `<repo>-<cockpit key>` because one profile drives two repos.
 
+## Evals
+
+`evals/` holds `claude plugin eval` cases for the pipeline's measured failures. Run the suite
+before committing a skill change, since this checkout is live for every profile:
+
+```sh
+claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
+```
+
+| Case | Guards against |
+|---|---|
+| `dispatch-arms-watcher` | a wave launched with no `watch-runs.sh --watch` armed in the same turn, or armed without the dispatching profile |
+| `intent-plan-passes-check` | a plan `plan-check.sh` would reject: missing section, template placeholder, slice without `- Files:`/`[verify]`, unmarked out-of-scope item |
+| `deliver-decides-alone` | `/deliver` asking the operator at a fork instead of deciding and logging it |
+| `land-on-green-verdict` | `Handoff: both` plus a green `DELIVERED`, and nobody invokes `/land` |
+| `land-holds-on-red` | the guard for the case above: a `gates: RED` verdict must not land |
+
+Every case is a **dry run**: Bash, Write and Edit are withheld, so no worktree, tmux session or push
+ever happens. The prompt supplies each script's output, and the model writes the commands and files it
+would produce into its reply, which the graders read. `--scaffold` builds a small synthetic project
+(`evals/_fixture/make-project.sh`) as each run's workspace, because every skill starts by reading
+the project's `.claude/workflow.md`; the flag only runs the scaffold scripts in this repo. Each case runs 3× with the plugin and
+3× without; `Δ` is what the skills add. Use `--runs 1 --ablation none --case <name>` while iterating.
+Results go to `evals/results/` (gitignored).
+
 ## Not here
 
 - `context-search` — owned by the `jbcontext` installer (`jbcontext upgrade` rewrites

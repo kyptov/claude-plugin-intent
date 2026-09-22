@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: land-holds-on-red
+context:
+  scaffold_script: fixture.sh
