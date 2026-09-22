@@ -77,7 +77,7 @@ A conventional commit (scopes per the project's conventions) in a temp file:
 - subject = the capability from the plan's `# <title>`, in product terms;
 - body = the `## Decisions (agent-made)` entries, one line each, so the reasoning survives in
   `git log` after the plan file is deleted;
-- footer = `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- footer = `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 Commit the §2 sweep in the worktree first — `land.sh` refuses a dirty worktree, and the sweep must
 ride inside the squash.
