@@ -12,7 +12,7 @@ to find what they were told to do.
 ## Run it
 
 ```sh
-~/.claude/skills/transcribe/transcribe.sh <file>
+"${CLAUDE_PLUGIN_ROOT}"/skills/transcribe/transcribe.sh <file>
 ```
 
 With no file argument it picks the newest audio/video from `~/Downloads` or `~/Desktop`

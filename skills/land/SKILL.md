@@ -85,7 +85,7 @@ ride inside the squash.
 ## 4. Run it
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/land/land.sh <worktree-path> --message-file <msg> \
+"${CLAUDE_PLUGIN_ROOT}"/skills/land/land.sh <worktree-path> --message-file <msg> \
   --gates "<gate commands from .claude/workflow.md>" \
   --extra-gate "<each conditional gate from the declaration's table that the plan triggered>" \
   --teardown "<per-worktree teardown command from workflow.md, if it names one>"

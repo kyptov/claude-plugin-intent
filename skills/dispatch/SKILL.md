@@ -57,7 +57,7 @@ project's dispatch preflight; run it per plan and route on its exit code:
 | `20` | `## Handoff` missing or a template placeholder — §2 |
 
 **If the declaration names no dispatch preflight, or the script is missing: stop and say so**, and
-point the operator at **`BOOTSTRAP.md` next to this file** — a paste-ready prompt that builds this
+point the operator at **`${CLAUDE_PLUGIN_ROOT}/skills/dispatch/BOOTSTRAP.md`** — a paste-ready prompt that builds this
 script against the project's own declaration. Same rule as `/deliver` §0c, same reason — the checks are project-shaped (the trunk, the plan template's
 `- Files:` lines, which lock files exist), and a cockpit that re-derives them from prose eventually
 reads a fresh lease as stale or blocks a wave over an unlanded branch that touches nothing this plan
@@ -103,7 +103,7 @@ script** next to this skill — never re-derived as prose, because a hand-run se
 quietly fail to start (a worktree prepared and never used; a session launched and never sent its plan).
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/dispatch/launch-run.sh <plan-path> --model <impl model> --effort <impl effort> --tag <project tag>
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/launch-run.sh <plan-path> --model <impl model> --effort <impl effort> --tag <project tag>
 ```
 
 Read model/effort from `.claude/workflow.md` ("Model policy") and `--tag` from its session-tag line. Pass `--install` / `--sync` from the
@@ -156,7 +156,7 @@ untracked file under the worktree's `.claude/` is one `git add -A` away from the
 resolves it to whatever the cockpit is called *at report time*:
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/dispatch/cockpit-addr.sh [worktree]
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/cockpit-addr.sh [worktree]
 ```
 
 `/deliver` §0 and §7 both call it; §7's call is the one that matters, because an hour passes in
@@ -167,7 +167,7 @@ which the titler skips. Only a name poked in from outside gets clobbered.
 it by hand — the same script owns the recovery:
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/dispatch/launch-run.sh --resend <plan-path>
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/launch-run.sh --resend <plan-path>
 ```
 
 It touches no worktree and creates no session: it finds the run, answers a held-message box, and —
@@ -254,11 +254,11 @@ duplicate cost. Watch your own runs only:
 Arm it as a **detached** `Bash` call — `run_in_background: true` — and end your turn:
 
 ```
-CLAUDE_CONFIG_DIR=<profile> "<profile>/skills/dispatch/watch-runs.sh" --watch --mine "<key>"
+CLAUDE_CONFIG_DIR=<profile> "${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/watch-runs.sh --watch --mine "<key>"
 ```
 
-Substitute the `CLAUDE_CONFIG_DIR` the wave was launched under (§3) into **both** slots as a literal
-path. `<key>` is this cockpit's pairing key (`ln-de`).
+`<profile>` is the `CLAUDE_CONFIG_DIR` the wave was launched under (§3), as a literal path. `<key>` is
+this cockpit's pairing key (`ln-de`).
 
 **The watcher ticks; you do not.** `--watch` loops on its own clock inside the script and returns only
 when the normalized finding set changes — so a wave that is merely working costs this session nothing
@@ -315,9 +315,9 @@ healthy run as `FOREIGN` and a finished one as nothing at all. The old spelling 
 a profile with no runs in it. §3's script pins the wave to `CLAUDE_CONFIG_DIR`, so the watcher names that same path
 rather than hoping to inherit it.
 
-The *script* path no longer has this problem — `skills/dispatch/` is one real directory in `~/.claude`
-symlinked into each profile, so every root resolves to the same file and an edit cannot land in a copy
-no session reads. That used to be a live failure mode and is now structural.
+The *script* path is a different matter and needs nothing from you: the scripts ship in the `workflow`
+plugin, and Claude Code expands the plugin-root placeholder in these commands to the plugin's directory
+when it loads this skill. The profile says whose wave it is; it no longer says where the code lives.
 
 It is one-shot and report-only — it never kills a run and never lands a branch. Its prefixes are the
 contract:

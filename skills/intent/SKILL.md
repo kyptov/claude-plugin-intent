@@ -183,7 +183,7 @@ still existing, every `## Out of scope` item marked, and no slug that already ha
 it reports first; a plan that fails it is a plan you are about to have authorised unread.
 
 If the declaration names no such script, re-read the plan against that same list yourself, and tell
-the operator the project should have one — `BOOTSTRAP.md` next to this file builds it. This is not a
+the operator the project should have one — `${CLAUDE_PLUGIN_ROOT}/skills/intent/BOOTSTRAP.md` builds it. This is not a
 hard stop the way it is in `/deliver` §0c and `/dispatch` §1: the operator is present here, so the
 check being manual is a cost, not a hazard.
 

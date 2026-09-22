@@ -1,0 +1,14 @@
+{
+  "name": "claude-plugin-intent",
+  "description": "Curtov's personal Claude Code workflow plugin, served from this local checkout.",
+  "owner": {
+    "name": "Curtov"
+  },
+  "plugins": [
+    {
+      "name": "workflow",
+      "source": "./",
+      "description": "Two-phase workflow skills: intent, dispatch, deliver, land, debt-review, transcribe."
+    }
+  ]
+}

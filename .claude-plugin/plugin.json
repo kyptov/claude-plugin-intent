@@ -1,0 +1,7 @@
+{
+  "name": "workflow",
+  "version": "1.0.0",
+  "description": "Two-phase workflow: /intent plans, /dispatch launches, /deliver implements unattended, /land merges; plus /debt-review and /transcribe.",
+  "author": { "name": "Curtov" },
+  "repository": "https://github.com/kyptov/claude-plugin-intent"
+}

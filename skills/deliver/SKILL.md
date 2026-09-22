@@ -27,7 +27,7 @@ stated their preference precisely, and it governs every judgement call in this s
 **Note who dispatched you — §7 has to report back to them.** Run this now, and again in §7:
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/dispatch/cockpit-addr.sh
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/cockpit-addr.sh
 ```
 
 It prints the cockpit's name **as of right now**, resolved from the sessionId `/dispatch` recorded at
@@ -70,7 +70,7 @@ section, with an exit-code contract per script.
 
 **If the declaration names no mechanics scripts, or a named script is missing or not executable:
 STOP before implementing anything.** Say which script is absent, and point the operator at
-**`BOOTSTRAP.md` next to this file** — a paste-ready prompt that builds a project's three mechanics
+**`${CLAUDE_PLUGIN_ROOT}/skills/deliver/BOOTSTRAP.md`** — a paste-ready prompt that builds a project's three mechanics
 scripts against its own declaration (`loadnex` is the reference implementation). Do **not**
 hand-assemble the gates from the declaration's table and carry on.
 
@@ -229,7 +229,7 @@ than re-composing them.
 during the hour you were working, which is the normal case, not a rare one:
 
 ```sh
-"$CLAUDE_CONFIG_DIR"/skills/dispatch/cockpit-addr.sh
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/cockpit-addr.sh
 ```
 
 ```
