@@ -21,22 +21,18 @@ autonomous cheap-model run makes on its own at 3am. Spend interaction budget her
 a wrong 8-hour run.
 
 **Do not write source code in this skill. The only file you create is the plan.** That is a binding
-rule here, not a mode — **do not enter plan mode** *(supersedes "Enter plan mode")*. Plan mode's only
-effect on this skill was to force an `ExitPlanMode` approval dialog over a plan file the operator has
-told us they do not read, on top of the one question §6 asks. Two dialogs gating one decision is one
-dialog too many, so the decision lives in §6 and nowhere else.
+rule here, not a mode — **do not enter plan mode**. The operator does not read the plan file, and the
+one approval lives in §6 and nowhere else.
 
-**What replaces it as the review is §5's spoken brief.** The plan is written for an agent; the brief
-is written for the operator, in the reply, in plain words. That is where a misunderstood interview
-gets caught — so a thin brief is now a real failure, not a stylistic one.
+**The review is §5's spoken brief.** The plan is written for an agent; the brief is written for the
+operator, in the reply, in plain words. That is where a misunderstood interview gets caught — so a
+thin brief is a real failure, not a stylistic one.
 
 ## 0a. `--quick` — the lane for small, visible tweaks
 
 When `$ARGUMENTS` starts with `--quick`, the operator is saying: *this is small, I have said all
-there is to say, build it.* About half of all intents are one-liners like "fix shadow clipping (left
-side)" or "buttons should stay to the right when load opens"; through the full interview each still
-cost two or more questions and a median 44 minutes to land, and short asks reached dispatch *slower*
-than detailed ones (19 vs 12.5 min), because the questions were about what the one-liner left out.
+there is to say, build it.* Typical asks: "fix shadow clipping (left side)", "buttons should stay to
+the right when load opens".
 
 **First decide whether it qualifies — by reading the code, not by asking.** It does only if all hold:
 
@@ -71,10 +67,9 @@ interview from §1.** Never quietly shrink a real feature to fit the lane.
 The operator's own workflow note: *investigate/plan = lots of interaction, implementation = none.*
 Respect the split absolutely.
 
-**Plain words, not tech words.** This is a measured, repeated request. Say "a person confirms before
-it counts" — not "a human-gated state transition". Name the thing the way the operator's business
-names it, not the way the schema does. If a term appears in the codebase but not in the operator's
-office, it does not belong in a question.
+**Plain words, not tech words.** Say "a person confirms before it counts" — not "a human-gated state
+transition". Name the thing the way the operator's business names it, not the way the schema does. If
+a term appears in the codebase but not in the operator's office, it does not belong in a question.
 
 **Ask about consequences, not implementations.** The operator decides *what the product does*; you
 decide *how the code does it*. Good option text describes what changes for each kind of user the
@@ -138,7 +133,7 @@ every section. Rules:
   gets treated as a boundary and disappears.
 - **Name the debt-pool items this plan would touch.** Read the pool before writing the slices; if a
   slice would incidentally fix a listed debt, say which, so `/land` can close it. Overlap is
-  invisible in both directions otherwise, and the pool's own measured problem is drain, not intake.
+  invisible in both directions otherwise, and the pool's problem is drain, not intake.
 - **One latest version, no history.** If you revise the plan mid-interview, rewrite the section.
   Never append "changed from X to Y" — the operator has asked for this explicitly and the project's doc
   rules forbid narrating how a doc got to its current state.
@@ -199,11 +194,9 @@ authorises everything downstream; there is no second gate behind it.
 | **Proceed — build it and land it** *(recommend this; the default answer)* | invoke `/dispatch`, which makes the worktree and starts the unattended run; `/land` squashes it onto the trunk as one commit when the gates are green | the feature landed and pushed |
 | **Just save the plan** | stop here and say the plan is ready | a plan file |
 
-**Two options, because the operator answers "both" every time** *(supersedes the four-option
-"how far should I take this on my own?")*. The two that are gone are still reachable: `AskUserQuestion`
-always offers free text, so "build it but leave the landing to me" or "run it while I watch" arrives
-as an override — fold it in, exactly as §1 says. `## Handoff` still accepts all four values and
-`/dispatch` still routes on all four; this skill has just stopped offering the two nobody picks.
+**Offer only these two.** `AskUserQuestion` always offers free text, so "build it but leave the
+landing to me" (`dispatch`) or "run it while I watch" (`deliver`) arrives as an override — fold it in,
+exactly as §1 says. `## Handoff` accepts all four values and `/dispatch` routes on all four.
 
 Write the answer into the plan's `## Handoff` **before** you do anything else with it — `both` for
 Proceed, `nothing` for Just save (the plan-check script's `--set-handoff <value>` does exactly this). That one line is the recovery path: if this turn dies, `/dispatch`
@@ -217,10 +210,9 @@ git add -- <plan-path> && git commit -m "<the project's commit style>: plan <wha
 ```
 
 A worktree branches from the trunk, so an uncommitted plan is not in the run's checkout at all, and
-the dispatch preflight blocks on the dirty main checkout (`13`) — measured ~7 times in one week, each
-one a round trip to commit by hand. The pathspec on both commands is the point: other cockpits share
-this checkout and may have their own files open, and `git add -A` or a bare `git commit` would sweep
-those into your commit. Do not push; `/land` pushes the trunk. If the plan is edited again before
+the dispatch preflight blocks on the dirty main checkout (`13`). The pathspec on both commands is the
+point: other cockpits share this checkout and may have their own files open, and `git add -A` or a
+bare `git commit` would sweep those into your commit. Do not push; `/land` pushes the trunk. If the plan is edited again before
 dispatch (a free-text override folded in), commit it again.
 
 **Nothing else asks for approval after this**, so nothing downstream will catch a malformed plan
@@ -237,13 +229,12 @@ check being manual is a cost, not a hazard.
 
 ## 7. Then act on the answer — in this turn, without being asked again
 
-**This is the step that gets skipped**: a handoff answer reads like a label for a state, not an
-instruction to act, so interviews end here with the plan written and nothing running.
+**Do not end the interview here with the plan written and nothing running.** A handoff answer reads
+like a label for a state; it is an instruction to act.
 
 **The answer to §6 is the approval. Act on it as your first action in that turn** — not a summary,
 not a closing paragraph, not "let me know if you want me to start", and **not an `ExitPlanMode`
-round**: this skill does not enter plan mode (§0), and re-asking for approval the operator just gave
-is the second dialog §6 exists to remove.
+round**: this skill does not enter plan mode (§0), and the operator has already approved.
 
 | `## Handoff` | Your immediate next action |
 |---|---|
@@ -256,9 +247,8 @@ is the second dialog §6 exists to remove.
 
 **One interview, one session, and it stays the cockpit for its own runs.** Interviews run in parallel,
 one per feature, because mixing three features' interviews into one context degrades the questions —
-and because the blocking resource is the operator, not the agent: median time from start to the
-handoff question is 67 minutes while the agent's own work before its first question is ~2 minutes.
-Serialising interviews would serialise the operator's answering. Run as many as they can answer
+and because the blocking resource is the operator, not the agent. Serialising interviews would
+serialise the operator's answering. Run as many as they can answer
 round-robin, about three.
 
 **So dispatch from here; never hand the plan to another session.** `/deliver` §7 reports `DELIVERED`

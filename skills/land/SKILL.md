@@ -28,9 +28,8 @@ behind quietly.**
 Everything mechanical about a landing — the land lock, the squash, the rebase→gates→fast-forward
 loop, the push, killing the run's `tmux` session, the per-worktree teardown, removing the worktree
 and branch, releasing the lock — is **one script next to this skill**, `land.sh`. You run it once,
-after the two judgment steps below (§2 the sweep, §3 the message). Prose re-derivation of that
-sequence is where landings went wrong: a lock left behind, a directory removed under a live session,
-a teardown run after the path it needed was gone.
+after the two judgment steps below (§2 the sweep, §3 the message). Never re-derive that sequence by
+hand.
 
 ## 2. Sweep the plan into the debt files — before the squash
 
@@ -101,17 +100,16 @@ attempts, branch namespace `WT_BRANCH_PREFIX` (default `wt`). The
 script: takes `.claude/land.lock`, **waiting up to `--lock-wait` minutes (default 25) when another
 landing holds it** — two landings overlapping in a wave is the normal case, so the second one queues
 instead of bouncing back to you; it takes a lock over at once when its owning process is gone.
-Exit 10 now means the wait ran out, which is a landing that is stuck rather than busy — report it,
+Exit 10 means the wait ran out, which is a landing that is stuck rather than busy — report it,
 do not re-run on a loop. A project whose gates are slow says so in its declaration (ml-billing's
 8-16 minute suite needs `--lock-wait 50`: three rebase attempts each re-run them). Then it squashes with
 `reset --soft <merge-base>` + one commit (exit 24 on an empty diff — the run delivered nothing,
 report that rather than landing a no-op); then up to 3 × { `git fetch`, `git rebase origin/<trunk>`,
 gates, `merge --ff-only` in the main checkout } — **re-running the gates after every rebase**,
 because `main` moved and the previous green described a tree that no longer exists; then pushes;
-then **kills the run's session first, tears down second, removes the directory third** (a landed
-run once sat for six minutes in a directory that no longer resolved, failing its Stop hook every
-turn — and the teardown derives its target from the worktree's own path, which is gone after
-removal). Teardown failure warns and continues: it must never block a green land. Last line on
+then **kills the run's session first, tears down second, removes the directory third** (a live
+session in a removed directory fails its Stop hook every turn, and the teardown derives its target
+from the worktree's own path). Teardown failure warns and continues: it must never block a green land. Last line on
 success: `LANDED <hash> <subject>`.
 
 ## 5. Read the exit code, then confirm
@@ -145,7 +143,7 @@ that cannot land must be **loud**, because the alternative is a finished feature
 
 Nothing to do here by hand: `/dispatch` §1 runs the project's dispatch preflight per plan, which
 lists every unlanded branch and **blocks only when one overlaps the next plan's files** (its exit
-12). That is the same check this section used to spell out as a loop, minus the eyeballing.
+12).
 
 What is worth doing after a green land is confirming the pair the landing removes — the `impl:` row
 is gone from `ListAgents` and the worktree is gone from `git worktree list` (§5, exit 0). A branch

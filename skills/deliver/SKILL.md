@@ -33,13 +33,10 @@ stated their preference precisely, and it governs every judgement call in this s
 It prints the cockpit's name **as of right now**, resolved from the sessionId `/dispatch` recorded at
 launch. Use what it prints; do not use the `cockpit: <name>` that came with your plan.
 
-**Why a script and not the name you were handed.** A session name is not a stable address. `/dispatch`
-renames your cockpit by writing into its registry file, but the live cockpit process never reads that
-file back, so Claude Code's conversation auto-titler overwrites the rename with its own title —
-measured at 3–5 seconds after dispatch, on every cockpit in a four-run wave. The name you were handed
-is very likely already dead by the time you finish. Your own name is safe (you were born with it), so
-`<tag>-<hex> · impl <slug>` still tells you the pairing key — that is the resolver's last fallback,
-not your first move.
+**A session name is not a stable address.** Claude Code's conversation auto-titler overwrites the
+name `/dispatch` gave your cockpit within seconds, so the name you were handed is likely dead by the
+time you finish. Your own name is safe (you were born with it), so `<tag>-<hex> · impl <slug>` still
+tells you the pairing key — that is the resolver's last fallback, not your first move.
 
 If the resolver exits non-zero it means no live session matches — a genuinely absent cockpit. Say so
 in your final report and do not guess a name. Run it at §0 anyway: a resolver that already fails now
@@ -57,9 +54,9 @@ If those two paths are equal you are in the **main checkout**, not a worktree. *
 not implement a single line. Say so and tell the operator to dispatch the plan properly, which creates
 the worktree for you.
 
-This is one git command and it is not negotiable. Plans are never delivered in the main checkout: the choice
-was once per-session while concurrency is global, so several runs each saw an empty room, each chose the
-main checkout, and interleaved several features into one unreviewable working tree.
+This is one git command and it is not negotiable. Plans are never delivered in the main checkout:
+concurrency is global, so several runs can each see an empty room and interleave their features into
+one unreviewable working tree.
 
 ## 0c. The mechanics scripts — no script, no run
 
@@ -74,10 +71,9 @@ STOP before implementing anything.** Say which script is absent, and point the o
 scripts against its own declaration (`loadnex` is the reference implementation). Do **not**
 hand-assemble the gates from the declaration's table and carry on.
 
-This is a deliberate hard stop, not a missing fallback. Hand-assembly is exactly what the scripts
-replace: it re-derives a conditional gate table from prose on every slice, silently drops the row it
-did not notice (a client codegen, a type-only web gate, an unprovisioned test database), and then
-reports the resulting green as if it meant something. A run that stops costs the operator one
+This is a deliberate hard stop, not a missing fallback. Hand-assembled gates re-derive a conditional
+table from prose on every slice, silently drop the row nobody noticed (a client codegen, a type-only
+web gate, an unprovisioned test database), and report the resulting green as if it meant something. A run that stops costs the operator one
 command. A run that improvises its gates costs them a landed feature that was never gated.
 
 ## 1. The autonomy contract

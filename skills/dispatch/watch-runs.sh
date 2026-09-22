@@ -1,18 +1,13 @@
 #!/bin/bash
 # One-shot health poll over dispatched implementation runs. Prints one line per finding and exits.
 #
-# WHY THIS EXISTS: `claude agents` is the observability pane and it is enough — when you look at it.
-# The failure mode is not looking. Measured, in one afternoon: two runs sat parked 57 and 67 minutes
-# on a `Monitor` permission prompt no rule covered, and a third finished, landed, and freed its
-# worktree without anyone noticing either event. Dispatched runs are launched with
-# `--permission-mode bypassPermissions` now, so parking is far less likely — but "less likely" is not
-# "impossible", and silence and unlanded branches were never covered by the permission fix at all.
+# `claude agents` shows run state only to someone looking at it. This script does the looking: a run
+# parked on a prompt, a run gone silent, a worktree nothing drives, a branch nobody landed.
 #
-# Called each tick by the cockpit's `/loop`. Report-only by design: it never kills a run and never
-# lands a branch. Landing stays driven by the plan's `## Handoff`, so that one operator decision has
-# exactly one owner.
+# Report-only by design: it never kills a run and never lands a branch. Landing stays driven by the
+# plan's `## Handoff`, so that one operator decision has exactly one owner.
 #
-# Prefixes are stable and greppable — the loop diffs them between ticks and reports only changes:
+# Prefixes are stable and greppable — --watch diffs them between ticks and wakes only on a change:
 #   BLOCKED  a live run is waiting on a permission prompt (with the tool it is stuck on)
 #   STALLED  a run reports busy but its transcript has not moved in $STALL_MIN minutes
 #   ORPHAN   a worktree holds work but no live session owns it — nothing is driving it
@@ -31,11 +26,9 @@
 #   watch-runs.sh [--mine "<tag>-<hex>"]                      one-shot: print findings, exit
 #   watch-runs.sh --watch [--mine KEY] [--interval 60] [--max-min 30] [--state FILE]
 #
-# --watch moves the TICKING out of the model. It loops on its own clock and returns only when the
+# --watch keeps the TICKING out of the model. It loops on its own clock and returns only when the
 # normalized finding set differs from the previous tick — so a wave that is simply working costs the
-# cockpit nothing, and BLOCKED/STALLED/UNLANDED reach it within one interval instead of within one
-# `/loop` tick. Measured 2026-09-22 over 7 days: the per-minute `/loop` spelling cost 2,187 cockpit
-# turns and 421M cache-read tokens to report "no change" on almost every one of them.
+# cockpit nothing, and BLOCKED/STALLED/UNLANDED reach it within one interval.
 # Run it detached (`Bash` with run_in_background); the harness re-invokes the cockpit when it exits.
 #
 # --mine makes "watch your own runs only" structural instead of a rule the caller re-applies on every
@@ -68,9 +61,9 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
-# The MAIN checkout, not "wherever I was run from". `--show-toplevel` answers the latter, so calling
-# this from inside a worktree used to report the main checkout as if it were a dispatched run. Derive
-# it from the common git dir instead, which every worktree shares: <main>/.git -> <main>.
+# The MAIN checkout, not "wherever I was run from". `--show-toplevel` answers the latter, and from
+# inside a worktree would report the main checkout as a dispatched run. Derive it from the common git
+# dir instead, which every worktree shares: <main>/.git -> <main>.
 common=$(git rev-parse --git-common-dir 2>/dev/null) || { echo "ERROR not a git repo"; exit 0; }
 case "$common" in /*) ;; *) common="$PWD/$common" ;; esac
 repo=$(cd "$(dirname "$common")" 2>/dev/null && pwd) || { echo "ERROR cannot resolve repo root"; exit 0; }
@@ -94,9 +87,7 @@ transcript_for() {
 
 # Is ANYTHING driving this worktree? `claude agents` cannot answer that: its registry is per profile,
 # so a wave dispatched under .claude-work is invisible to a poll under .claude-personal, and a cloud
-# session is invisible to both. Measured: a healthy two-run wave reported ORPHAN when polled from the
-# wrong profile, and a run that had in fact finished and landed was called dead because no local
-# process backed it. So ask the OS instead — a live process whose cwd is the worktree, or a transcript
+# session is invisible to both. So ask the OS instead — a live process whose cwd is the worktree, or a transcript
 # under ANY profile that moved recently. Both are true regardless of which profile is asking.
 driven() {
   lsof -a -d cwd -c claude -Fn 2>/dev/null | grep -qx "n$1" && return 0
@@ -158,9 +149,9 @@ git -C "$repo" worktree list --porcelain | awk '/^worktree /{print $2}' | while 
     # `${mine}` braced deliberately: bash 3.2 reads `$mine·` as a variable named `mine\xc2` and
     # dies with "unbound variable", because it swallows the separator's first UTF-8 byte.
     case "$aname" in
-      ("${mine} · "*|"${mine}·"*|"impl: ${mine} · "*) ;;  # mine — current shape, or an older one
-      (*" · impl "*|*"·"*) continue ;;                    # another cockpit's run
-      (*) ;;                                              # not a dispatched run at all — keep
+      ("${mine} · "*|"${mine}·"*) ;;      # mine
+      (*" · impl "*|*"·"*) continue ;;    # another cockpit's run
+      (*) ;;                              # not a dispatched run at all — keep
     esac
   fi
 
@@ -177,10 +168,10 @@ git -C "$repo" worktree list --porcelain | awk '/^worktree /{print $2}' | while 
   fi
 
   # A Remote Control run reads "idle" twice: once when /deliver has finished, and once in the window
-  # between launch and the SendMessage that hands it the plan (§4). Only the first is UNLANDED. The
-  # second is the failure mode this design introduces — a session launched and then never given its
-  # plan sits at an empty prompt box looking exactly like a finished one, so separate them by whether
-  # any work exists, and escalate a young empty session to STALLED once the send is clearly overdue.
+  # between launch and the typed hand-off of its plan (/dispatch §3). Only the first is UNLANDED. A
+  # session never given its plan sits at an empty prompt box looking exactly like a finished one, so
+  # separate them by whether any work exists, and escalate a young empty session to STALLED once the
+  # send is clearly overdue.
   if { [ "$status" = "idle" ] || [ "$state" = "done" ]; } \
      && [ -z "$waiting" ] && [ "$ahead" = "0" ] && [ "$dirty" = "0" ]; then
     if [ "$idle_min" -ge "$STALL_MIN" ]; then
@@ -203,7 +194,7 @@ git -C "$repo" worktree list --porcelain | awk '/^worktree /{print $2}' | while 
 done
 
 # Branches ahead of the trunk whose worktree is already gone — the stranding this pipeline exists to
-# prevent. A finished 33-commit feature was once lost exactly here.
+# prevent.
 git -C "$repo" for-each-ref --format='%(refname:short)' "refs/heads/$WT_BRANCH_PREFIX" | while read -r b; do
   n=$(git -C "$repo" rev-list --count "$trunk".."$b" 2>/dev/null) || continue
   [ "$n" = "0" ] && continue
@@ -231,8 +222,8 @@ once() {
 #   sort  — `git worktree list` order is not stable across ticks, and a reordered but identical set
 #           is not a change.
 #   digits→N — every line carries a counter that moves on its own (elapsed minutes, commit count,
-#           dirty count). Left in, they differ on almost every tick and the watcher degenerates into
-#           the per-minute poll it replaces. Cost: two slugs differing only in a digit hash alike;
+#           dirty count). Left in, they differ on almost every tick and the watcher wakes the cockpit
+#           every interval. Cost: two slugs differing only in a digit hash alike;
 #           they remain separate LINES, so the set still differs whenever both are present.
 signature() { printf '%s\n' "$1" | sed 's/[0-9][0-9]*/N/g' | sort; }
 
@@ -255,8 +246,7 @@ fi
 # BLOCKED must not fire instantly again. Only a genuinely new picture wakes the cockpit.
 # Keyed by REPO as well as cockpit. One profile dispatches for several repos (.claude-personal drives
 # ml-billing and rtu), so a key built from `--mine` alone collides: two watchers share one file, each
-# reads the other's findings as its baseline, and they wake each other every tick — strictly worse
-# than the poll this replaces. Omitting `--mine` made that collision certain, since the key was "all".
+# reads the other's findings as its baseline, and they wake each other every tick.
 [ -n "$state_file" ] || {
   dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/dispatch-runs"
   mkdir -p "$dir" 2>/dev/null

@@ -14,16 +14,15 @@
 # Without --install the install is inferred from the lockfile (pnpm/yarn/npm/bun); without --sync a
 # `worktree:sync` package script is run if the repo declares one.
 #
-# Everything /dispatch §4 used to spell out as six shell blocks the model re-derived on every wave,
-# now one deterministic script: worktree + branch, dependency install, the project's worktree sync,
-# folder pre-trust, the per-project tmux socket, the RC session, the registration wait, the plan
-# hand-off typed at the TTY (send-keys — a cross-session message can be silently held, a keystroke
-# cannot), and a pane check. Prints a machine-readable summary on the last lines:
+# Steps, in order: worktree + branch, dependency install, the project's worktree sync, folder
+# pre-trust, the per-project tmux socket, the RC session, the registration wait, the plan hand-off
+# typed at the TTY (send-keys — a cross-session message can be silently held, a keystroke cannot),
+# and the hand-off confirmation. Prints a machine-readable summary on the last lines:
 #   WT=<path> BRANCH=<wt/slug> SOCK=<impl-proj> SESSION=<impl-proj-slug> NAME=<tag-hex · impl slug>
 #   COCKPIT_PID=<pid> SENT=yes|unconfirmed
 # SENT=yes is read off the run's own transcript (the plan was submitted, not merely typed), and the
-# launch already retries the two measured hand-off failures before it answers — so SENT=yes is final
-# and needs no follow-up --resend.
+# launch already retries both hand-off failures (see confirm_pane) before it answers — so SENT=yes is
+# final and needs no follow-up --resend.
 #
 # It also drops a dispatch record at $CLAUDE_CONFIG_DIR/dispatch-runs/<munged worktree path> holding
 # the cockpit's sessionId/pid/key. That, not the `cockpit: <name>` typed onto the pane, is the run's
@@ -97,9 +96,7 @@ session="impl-$proj-$slug"
 #   ml-6a · impl zero-consumption    <- its run
 #
 # So the KEY is the tag, not the cockpit's name — `--mine` filters on it, and two sessions pair iff
-# their names start with the same `<tag>-<hex> `. The old shape (`impl: <cockpit name> · <slug>`)
-# made the whole cockpit name the key, which is why an explicitly-named cockpit pushed the slug
-# off-screen and why a renamed cockpit orphaned its runs.
+# their names start with the same `<tag>-<hex> `. Renaming the human half never orphans a run.
 #
 # `<tag>` is the project's own abbreviation, declared per project (`--tag`, from the workflow
 # declaration) because no rule derives both `loadnex -> ln` and `ml-billing -> ml`; the fallback is
@@ -158,16 +155,14 @@ write_dispatch_record() {
 }
 
 # Rename the COCKPIT to `<tag>-<hex> · <human title>` and mark the name explicit — a session whose
-# name is merely `derived` is displayed by its auto-generated title instead, which is why a cockpit
-# row and its runs look unrelated today. The human half comes from --cockpit-title, else the plan's
-# own `# ` heading, which the template already requires to be the capability in plain words.
+# name is merely `derived` is displayed by its auto-generated title instead. The human half comes from
+# --cockpit-title, else the plan's own `# ` heading, which the template requires to be the capability
+# in plain words.
 #
 # THIS RENAME IS COSMETIC AND BEST-EFFORT. Nothing may depend on it holding. It is a write into the
 # registry FILE, and the live cockpit process never reads that file back — it keeps its own name
-# state — so Claude Code's conversation auto-titler overwrites the poke with its own title, without
-# noticing or reporting a conflict. Measured on the 2026-09-18 15:02 wave: four cockpits renamed,
-# four re-titled 3-5 seconds later, four runs left holding an address that no longer resolved. The
-# `nameSource = derived` guard below cannot prevent it — it reads the state BEFORE the titler runs,
+# state — so Claude Code's conversation auto-titler overwrites it within seconds, silently. The
+# `nameSource = derived` guard below cannot prevent that: it reads the state BEFORE the titler runs,
 # and a cockpit that dispatches before it has ever been auto-titled is the normal case.
 # The run's own name is safe because it is born explicit (`claude -n`), which the titler skips.
 # The durable return address is write_dispatch_record + cockpit-addr.sh, not this name.
@@ -198,20 +193,18 @@ name_cockpit() {
   [ -n "$ctitle" ] || ctitle=$slug
   want="$tag-$hex · $ctitle"
   [ "$want" != "$parent" ] || return 0
-  # Two shapes, because neither alone is enough. `contains($p)` catches a run launched under the
-  # older `impl: <cockpit> · <slug>` naming. The key test catches the case this whole file now
-  # documents: the cockpit has been re-titled since its last dispatch, so its live runs no longer
-  # contain its CURRENT name and `contains` alone would silently stop refusing.
-  if claude agents --json 2>/dev/null | jq -e --arg p "$parent" --arg k "$cockpit_id" \
-       '.[] | select((.name != $p and (.name | contains($p))) or (.name | startswith($k + " · impl ")))' >/dev/null 2>&1; then
+  # Match live runs by the pairing KEY, not the cockpit's name: the cockpit may have been re-titled
+  # since its last dispatch, and then its runs no longer contain its CURRENT name.
+  if claude agents --json 2>/dev/null | jq -e --arg k "$cockpit_id" \
+       '.[] | select(.name | startswith($k + " · impl "))' >/dev/null 2>&1; then
     echo "WARN: keeping the cockpit name '$parent' — it has live runs whose return address is that name." >&2
     echo "WARN: it will be renamed to '$want' on the first dispatch after those land." >&2
     return 0
   fi
   # Only NOW may the key move: every `return 0` above leaves `cockpit_id` as derive_cockpit_id read
   # it off the CURRENT name, so a refused rename still names this run with the key the cockpit
-  # actually carries. Assigning the new key before the refusals produced the exact breakage the
-  # refusals exist to prevent — runs tagged `ln-de` under a cockpit still called `loadnex-de`.
+  # actually carries. Assigning it before the refusals would tag runs `ln-de` under a cockpit still
+  # called `loadnex-de`.
   cockpit_id="$tag-$hex"
   python3 - "$sf" "$want" <<'PY'
 import json, os, sys, tempfile
@@ -229,9 +222,7 @@ PY
 
 # Did the run SUBMIT its plan? The proof is the run's own transcript, not the pane: a submitted
 # `/deliver <plan>` is written there as a user turn carrying `<command-args><plan>`, and nothing else
-# writes that. The pane cannot tell — a line typed but never submitted reads exactly like a sent one,
-# which is how the old `grep deliver` on the pane printed SENT=yes for runs sitting at an empty
-# prompt, and why every launch in the week of 2026-09-15 ended in a hand-run --resend (25 of 106).
+# writes that. The pane cannot tell — a line typed but never submitted reads exactly like a sent one.
 # The transcript is found through the run's own registry record (cwd == worktree), so a transcript
 # left behind by an earlier run of the same slug can never vouch for this one.
 plan_submitted() {
@@ -254,7 +245,7 @@ wait_submitted() {
 }
 
 # Settle the hand-off: wait for the transcript to show the plan, and if it does not, clear the two
-# measured ways a typed line fails to submit, then wait again. Sets $pane and $sent.
+# ways a typed line fails to submit, then wait again. Sets $pane and $sent.
 #   1. a "held message / review it below" box swallows the line — answer it with Down Enter;
 #   2. the Enter itself is eaten (the idle subscription, or a box that appeared between the text and
 #      the newline), leaving the command sitting UNSENT in the input box. Press Enter on its own
@@ -367,13 +358,11 @@ write_dispatch_record
 name="${cockpit_id} · impl ${slug}"
 
 echo "==> tmux -L $sock: $session"
-# CLAUDE_CODE_PROMPT_CACHE_TTL=5m: a dispatched run's turns are back to back — measured 2026-09-22
-# over 7 days, only 37 of 15,898 turn gaps exceeded 5 minutes (p99 = 140s), so the 5-minute entry is
-# refreshed by the next turn essentially always and the 1-hour TTL's 2x write premium (vs 1.25x) buys
-# nothing. Worth ~$39/wk on this repo's volume. The COCKPIT is the opposite case and stays on 1h: it
-# waits on a watcher for many minutes at a time, and a cold re-write of its context costs far more
-# than the premium. Re-measure this before making a gate block in the FOREGROUND for >5 minutes —
-# that would manufacture exactly the gaps this setting bets against.
+# CLAUDE_CODE_PROMPT_CACHE_TTL=5m: a dispatched run's turns are back to back (p99 gap ~140s), so the
+# 5-minute entry is refreshed by the next turn and the 1-hour TTL's 2x write premium (vs 1.25x) buys
+# nothing. The COCKPIT is the opposite case and stays on 1h: it waits on a watcher for many minutes
+# at a time. Do not make a gate block in the FOREGROUND for >5 minutes — that creates exactly the
+# gaps this setting bets against.
 tmux -L "$sock" new-session -d -s "$session" -c "$wt" \
   "env CLAUDE_CONFIG_DIR=$profile CLAUDE_CODE_PROMPT_CACHE_TTL=5m CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL=5m claude --remote-control -n '$name' --model $model --effort $effort --permission-mode bypassPermissions" \
   || { echo "tmux launch failed" >&2; exit 71; }

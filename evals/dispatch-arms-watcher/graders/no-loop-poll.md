@@ -3,4 +3,4 @@ type: regex
 match: not_contains
 pattern: '(^|\s)/loop\b'
 ---
-A per-minute /loop on top of --watch is the poll the watcher replaced.
+A /loop on top of --watch duplicates the watcher and pays a cockpit turn per tick.

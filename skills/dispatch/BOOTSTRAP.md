@@ -49,8 +49,8 @@ CONTRACT — the exit code is the interface; the skill routes on it, so these nu
           `git diff --name-only <trunk>..<branch>` for each.
         - overlap = exact path equality, or either path is a directory prefix of the other.
       An overlapping branch BLOCKS (12) — two runs editing one file is the interleaving the whole
-      pipeline exists to prevent. A non-overlapping unlanded branch is REPORTED and does NOT block;
-      it used to, and blocking a wave over an unrelated branch is a real cost.
+      pipeline exists to prevent. A non-overlapping unlanded branch is REPORTED and does NOT block:
+      blocking a wave over an unrelated branch is a real cost.
       If the plan names no paths at all, print a WARN saying the test cannot run, report every
       unlanded branch, and block nothing.
   0   Clear to dispatch. Print the handoff value on the way through — the skill reads it from here

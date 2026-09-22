@@ -3,13 +3,10 @@
 #
 #   cockpit-addr.sh [worktree]      # default: this worktree's root
 #
-# WHY THIS EXISTS: a session name is NOT a stable address. `/dispatch` renames the cockpit by writing
-# `name` + `nameSource: "explicit"` straight into `$CLAUDE_CONFIG_DIR/sessions/<pid>.json`, but the
-# live cockpit process never reads that file back — it holds its own name state. Claude Code's
-# conversation auto-titler then writes its own title over the poke. Measured on one 2026-09-18
-# dispatch wave: ALL FOUR cockpits were re-titled 3-5 seconds after the script renamed them, and
-# every run in that wave finished holding a `cockpit:` address that no longer resolved. A run that
-# dispatches before its cockpit has ever been auto-titled is the NORMAL case, not an edge one.
+# A session name is NOT a stable address. `/dispatch` renames the cockpit by writing `name` +
+# `nameSource: "explicit"` straight into `$CLAUDE_CONFIG_DIR/sessions/<pid>.json`, but the live
+# cockpit process never reads that file back — it holds its own name state — so Claude Code's
+# conversation auto-titler writes its own title over the rename within seconds.
 #
 # The run's own name is safe by contrast — it is born explicit (`claude -n`), so the titler skips it.
 # Only the cockpit's is poked from outside, and only the cockpit's gets clobbered.
