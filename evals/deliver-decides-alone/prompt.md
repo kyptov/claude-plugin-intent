@@ -1,7 +1,7 @@
 ---
 description: "/deliver meets a fork the plan left open and decides + logs it, instead of asking."
 tags: [deliver, run]
-model: sonnet
+model: opus
 max_turns: 40
 timeout_seconds: 900
 allowed_tools: [Read, Glob, Grep, Skill]

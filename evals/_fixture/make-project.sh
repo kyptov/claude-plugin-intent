@@ -123,7 +123,7 @@ All under `.claude/scripts/`.
 
 ## Model policy
 
-Implementation `sonnet` / `medium`; escalate a slice to `opus` / `high` after two failed gate
+Implementation `opus` / `medium`; escalate a slice to `opus` / `high` after two failed gate
 cycles. Interview, plan authoring, `/land` conflict resolution: `opus` / `high`.
 
 ## Canon docs
@@ -174,7 +174,7 @@ Why this exists: the problem, what prompted it, the intended outcome. Two paragr
 
 ## Model policy
 
-Implementation: `sonnet` / `medium`. Escalate a slice to `opus` / `high` after 2 failed gate cycles.
+Implementation: `opus` / `medium`. Escalate a slice to `opus` / `high` after 2 failed gate cycles.
 
 ## Handoff (answered by the operator as the last question of `/intent`)
 
@@ -251,7 +251,7 @@ An operator glancing at a run card reads its length as hours and minutes, like `
 
 ## Model policy
 
-Implementation: `sonnet` / `medium`. Escalate a slice to `opus` / `high` after 2 failed gate cycles.
+Implementation: `opus` / `medium`. Escalate a slice to `opus` / `high` after 2 failed gate cycles.
 
 ## Handoff (answered by the operator as the last question of `/intent`)
 
