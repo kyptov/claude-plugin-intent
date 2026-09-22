@@ -1,53 +1,139 @@
 # workflow — Claude Code plugin
 
-The two-phase workflow skills, served to every Claude profile on this machine from this checkout:
+A two-phase workflow for Claude Code: you are interviewed once, up front, and everything after that
+runs unattended in its own git worktree until the feature lands on the trunk as a single commit.
 
 | Skill | Job |
 |---|---|
-| `/intent` | interview the operator, write the plan contract |
+| `/intent` | interview the operator, write the plan contract; `--quick` skips the interview for a small visible tweak |
 | `/dispatch` | create the worktree, launch the unattended `/deliver` run, watch it |
-| `/deliver` | execute a plan to completion with zero interaction |
+| `/deliver` | execute a plan to completion with zero interaction, logging every decision it makes alone |
 | `/land` | squash-merge a finished worktree branch onto the trunk |
 | `/debt-review` | drain the carried-debt pool into the next `/intent` wave |
 | `/transcribe` | local audio/video → text (mlx-whisper; needs `ffmpeg` and `uv`) |
 
-Project-specific facts never live here — each repo carries its own `.claude/workflow.md` and
-`.claude/scripts/`.
+## How a feature moves
 
-## How it is installed
+1. **`/intent`**, in your main checkout: a few rounds of plain-language questions about *what* the
+   feature does. The agent decides *how* on its own, writes a plan contract (intent, your answers,
+   slices with verify commands, what is out of scope), briefs you in a few paragraphs, and asks one
+   question: build it, or just save the plan. The plan is committed on the trunk.
+2. **`/dispatch`** creates a worktree on `wt/<slug>`, starts a Claude Code Remote Control session in
+   a per-project `tmux` socket, and hands it `/deliver <plan>`. The session that dispatched (the
+   *cockpit*) arms a watcher and waits.
+3. **`/deliver`** runs in the worktree with no questions allowed: forks are decided against the plan's
+   intent and logged in the plan, each slice is gated and committed, and the run reports
+   `DELIVERED <slug> — gates: green | RED` back to the cockpit.
+4. **`/land`**, on a green verdict: files the plan's leftovers into the project's debt files, squashes
+   the branch into one commit, rebases, re-runs the gates, fast-forwards the trunk, pushes, and removes
+   the worktree and branch.
 
-This repo is both the marketplace (`claude-plugin-intent`) and the plugin (`workflow`). Each profile
-has it added as a local directory marketplace:
+`/debt-review` runs on a cadence (weekly) and turns the debt pool back into ready-to-paste `/intent`
+commands.
+
+## Requirements
+
+- macOS. The scripts target `/bin/bash` 3.2 and use BSD `stat`, `lsof` and `ps`.
+- `git`, `tmux`, `jq`, `python3`, and the Claude Code CLI.
+- For `/transcribe`: Apple Silicon, `ffmpeg`, and `uv`.
+
+## Install
 
 ```sh
-for p in ~/.claude ~/.claude-work ~/.claude-personal; do
-  CLAUDE_CONFIG_DIR=$p claude plugin marketplace add ~/Projects/claude-plugin-intent
-  CLAUDE_CONFIG_DIR=$p claude plugin install workflow@claude-plugin-intent
-done
+claude plugin marketplace add kyptov/claude-plugin-intent
+claude plugin install workflow@claude-plugin-intent
 ```
 
-A directory marketplace loads the plugin **in place**: `${CLAUDE_PLUGIN_ROOT}` expands to this
-checkout, and an edit here is live in every profile's next skill load — no sync, no update command.
-The flip side: **whatever is checked out here is production** for all four repos. Experiment in a
-separate worktree, not by switching this checkout's branch.
+**`CLAUDE_CONFIG_DIR` must be set in the session you dispatch from.** `launch-run.sh` refuses to run
+without it, pins it into the run's `tmux` command, and keeps runtime state (dispatch records, watcher
+state) under `$CLAUDE_CONFIG_DIR/dispatch-runs/`. With the default profile:
 
-This replaced `~/.claude-skills/sync.sh`, which `cp -R`'d the tree into each profile. That script now
-hard-fails; do not recreate `skills/{intent,dispatch,deliver,land,debt-review,transcribe}` in any
-profile — a profile copy shadows nothing and drifts silently.
+```sh
+export CLAUDE_CONFIG_DIR="$HOME/.claude"    # in your shell profile
+```
 
-## `CLAUDE_CONFIG_DIR` vs `${CLAUDE_PLUGIN_ROOT}`
+To work on the plugin itself, add a clone as a local directory marketplace instead. It is loaded **in
+place**: `${CLAUDE_PLUGIN_ROOT}` expands to your clone, and an edit is live at the next skill load.
+That also means whatever is checked out there is what every project runs, so experiment in a separate
+worktree rather than by switching the clone's branch.
 
-- **Where the scripts live** → `${CLAUDE_PLUGIN_ROOT}/skills/...`, substituted by Claude Code when a
-  skill loads.
-- **Which profile a wave belongs to** → still `CLAUDE_CONFIG_DIR`. `launch-run.sh` refuses to run
-  without it and pins it into the tmux child; `launch-run.sh`, `watch-runs.sh` and `cockpit-addr.sh`
-  keep runtime state under `$CLAUDE_CONFIG_DIR/dispatch-runs/`. The watcher's state file is keyed
-  `<repo>-<cockpit key>` because one profile drives two repos.
+```sh
+claude plugin marketplace add ~/path/to/claude-plugin-intent
+claude plugin install workflow@claude-plugin-intent
+```
+
+## Bootstrap a project
+
+The plugin carries no project facts. Every skill starts by reading **`.claude/workflow.md`** in the
+project root, and the deterministic steps — preflight, gates, run report, plan check — are scripts the
+project owns under `.claude/scripts/`, because only the project knows its gates. A project is ready
+after four steps.
+
+### 1. Write the declaration, `.claude/workflow.md`
+
+It names, in whatever headings suit you:
+
+- **Trunk and remote** — the trunk branch and its remote.
+- **Gates** — the full gate command line, any conditional gates (which paths trigger which extra
+  gate), and their traps.
+- **Scripted mechanics** — a table of the scripts from step 3 with their exit codes (the bootstrap
+  prompts add these rows).
+- **Plans** — where plans live and which template they follow.
+- **Binding rules** — the project's rules file (e.g. `CLAUDE.md`), which wins over the declaration.
+- **Users** — who uses the product, so `/intent` can ask in their terms.
+- **Worktree setup** — the install command (`--install`) and any step that copies gitignored local
+  config into a new worktree (`--sync`).
+- **Branch namespace** (default `wt`) and **session tag**, a short project abbreviation used to pair a
+  cockpit with its runs (`launch-run.sh --tag`).
+- **Deploy commands** — listed so `/deliver` and `/land` know never to run them.
+- **Protected files** — secret/env files a run must stop before touching.
+- **Model policy** — implementation model and effort, the escalation after repeated red gates, and the
+  review effort for sensitive areas.
+- **Canon docs** — the documents plans cite as `doc §n`, including the roadmap `/debt-review` ranks
+  against.
+- **Debt destinations** — the debt pool, the operator queue (work only a human can do), the branch
+  triage file (branches that could not land), and any plan files that are kept rather than deleted.
+- **Read-only production check** — the diagnostic `/debt-review` may use to confirm operator work is
+  done.
+
+`evals/_fixture/make-project.sh` writes a complete minimal declaration for a demo project; start from
+that.
+
+### 2. Add the plan template
+
+Put it where the declaration says. `/intent` fills it, `/deliver` appends to it, `/land` routes on it,
+so it needs these sections: `Context`, `Intent`, `Your calls`, `Agent's calls`, `Canon sections`,
+`Where it runs`, `Model policy`, `Handoff` (with an `Auto: **<nothing | dispatch | deliver | both>**`
+line), `Slices` (each with `- Files:` and a `[verify]` command), `Gates`, `Out of scope` (items marked
+`[boundary]` or `[gap]`), `Decisions (agent-made)`, and `Not delivered` (entries tagged `[agent]` or
+`[operator]`). The same fixture has a complete template.
+
+Create the debt files the declaration names, even if empty.
+
+### 3. Build the mechanics scripts
+
+Each `BOOTSTRAP.md` holds a self-contained prompt. Paste its fenced block into a Claude session in the
+project. The prompt states the contract (the exit codes the skill routes on), builds the script
+against your declaration, adds its row to the declaration's Scripted mechanics table, and proves it
+works on throwaway fixtures before it finishes.
+
+| Prompt | Builds | Without it |
+|---|---|---|
+| `skills/deliver/BOOTSTRAP.md` | `.claude/scripts/deliver/{preflight,gate,report}.sh` and a shared `lib.sh` | `/deliver` stops before the first edit |
+| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches | `/dispatch` stops |
+| `skills/intent/BOOTSTRAP.md` | `.claude/scripts/intent/plan-check.sh` — the one machine check on a plan before it is approved | `/intent` checks the plan by hand and says the script is missing |
+
+The three are independent; paste them in any order, or all in one session.
+
+### 4. Try it
+
+Run `/intent --quick <a one-line visible tweak>` in the main checkout. It should write and commit a
+plan, dispatch it, and land it when the run reports green.
 
 ## Evals
 
-`evals/` holds `claude plugin eval` cases for the pipeline's measured failures. Run the suite
-before committing a skill change, since this checkout is live for every profile:
+`evals/` holds `claude plugin eval` cases for the pipeline's known failure modes. Run the suite before
+committing a skill change:
 
 ```sh
 claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
@@ -64,16 +150,7 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 
 Every case is a **dry run**: Bash, Write and Edit are withheld, so no worktree, tmux session or push
 ever happens. The prompt supplies each script's output, and the model writes the commands and files it
-would produce into its reply, which the graders read. `--scaffold` builds a small synthetic project
-(`evals/_fixture/make-project.sh`) as each run's workspace, because every skill starts by reading
-the project's `.claude/workflow.md`; the flag only runs the scaffold scripts in this repo. Each case runs 3× with the plugin and
-3× without; `Δ` is what the skills add. Use `--runs 1 --ablation none --case <name>` while iterating.
+would produce into its reply, which the graders read. `--scaffold` builds the demo project
+(`evals/_fixture/make-project.sh`) as each run's workspace. Each case runs 3× with the plugin and 3×
+without; `Δ` is what the skills add. Use `--runs 1 --ablation none --case <name>` while iterating.
 Results go to `evals/results/` (gitignored).
-
-## Not here
-
-- `context-search` — owned by the `jbcontext` installer (`jbcontext upgrade` rewrites
-  `~/.claude/skills/context-search`, and `~/.claude-skills/sync-jbcontext.sh` links it into the other
-  profiles). A copy here would be a second source for it.
-- Repo-specific skills and scripts (e.g. loadnex's `deploy`, `operate`, `decompose`,
-  `.claude/scripts/**`) stay in their repos.
