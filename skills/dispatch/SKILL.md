@@ -50,7 +50,7 @@ project's dispatch preflight; run it per plan and route on its exit code:
 | | |
 |---|---|
 | `0` | clear to dispatch |
-| `10` | `land.lock` held — a landing is in flight |
+| `10` | `land.lock` held — a landing is in flight (a *live* one: the project's preflight ignores a lock whose process is gone) |
 | `11` | main-checkout lease held and fresh (its own lease excluded) |
 | `12` | an unlanded branch **overlaps this plan's files** — `/land` it first |
 | `13` | main checkout dirty |

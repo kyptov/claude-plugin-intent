@@ -88,12 +88,22 @@ ride inside the squash.
 "${CLAUDE_PLUGIN_ROOT}"/skills/land/land.sh <worktree-path> --message-file <msg> \
   --gates "<gate commands from .claude/workflow.md>" \
   --extra-gate "<each conditional gate from the declaration's table that the plan triggered>" \
-  --teardown "<per-worktree teardown command from workflow.md, if it names one>"
+  --teardown "<per-worktree teardown command from workflow.md, if it names one>" \
+  --lock-wait "<minutes, only if the declaration names one>"
 ```
+
+**Run it detached — `Bash` with `run_in_background: true`.** It can wait for another landing *and
+then* run the full gates, which outlasts a foreground tool call; a killed tool call is also the one
+thing that can strand the lock (the script releases it on every other exit).
 
 `--gates` is required and is the declaration's full gate line; trunk defaults to `origin/HEAD`, 3
 attempts, branch namespace `WT_BRANCH_PREFIX` (default `wt`). The
-script: takes `.claude/land.lock` (exit 10 if another landing holds it); squashes with
+script: takes `.claude/land.lock`, **waiting up to `--lock-wait` minutes (default 25) when another
+landing holds it** — two landings overlapping in a wave is the normal case, so the second one queues
+instead of bouncing back to you; it takes a lock over at once when its owning process is gone.
+Exit 10 now means the wait ran out, which is a landing that is stuck rather than busy — report it,
+do not re-run on a loop. A project whose gates are slow says so in its declaration (ml-billing's
+8-16 minute suite needs `--lock-wait 50`: three rebase attempts each re-run them). Then it squashes with
 `reset --soft <merge-base>` + one commit (exit 24 on an empty diff — the run delivered nothing,
 report that rather than landing a no-op); then up to 3 × { `git fetch`, `git rebase origin/<trunk>`,
 gates, `merge --ff-only` in the main checkout } — **re-running the gates after every rebase**,
@@ -114,7 +124,7 @@ success: `LANDED <hash> <subject>`.
 | 22 | push refused | §6 (never `--force`) |
 | 23 | fast-forward refused three times | §6 — `main` is moving faster than the gates; try once more, then §6 |
 | 24 | empty squash | report; nothing to land |
-| 10 | another landing holds the lock | wait for it; never remove a lock you did not take |
+| 10 | the script already waited `--lock-wait` minutes and the lock did not clear | report it: a landing held that long is stuck, not busy. Do not re-run on a loop, and never remove a lock by hand while its process is alive |
 
 **Do not deploy.** That word belongs to the operator.
 
