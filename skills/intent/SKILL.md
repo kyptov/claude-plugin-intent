@@ -131,9 +131,10 @@ every section. Rules:
   doc's scope) or `[gap]` (real unbuilt work someone will want). `/land` routes on that mark, filing
   the `[gap]`s into the debt pool and letting the `[boundary]`s die with the plan. An unmarked item
   gets treated as a boundary and disappears.
-- **Name the debt-pool items this plan would touch.** Read the pool before writing the slices; if a
-  slice would incidentally fix a listed debt, say which, so `/land` can close it. Overlap is
-  invisible in both directions otherwise, and the pool's problem is drain, not intake.
+- **Name the debt-pool items this plan would touch.** Read the pool — and the declaration's debt
+  intake directory, if it names one: items landed since the last `/debt-review` wait there — before
+  writing the slices; if a slice would incidentally fix a listed debt, say which, so `/land` can
+  close it. Overlap is invisible in both directions otherwise, and the pool's problem is drain, not intake.
 - **One latest version, no history.** If you revise the plan mid-interview, rewrite the section.
   Never append "changed from X to Y" — the operator has asked for this explicitly and the project's doc
   rules forbid narrating how a doc got to its current state.

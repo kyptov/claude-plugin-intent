@@ -93,6 +93,9 @@ It names, in whatever headings suit you:
   against.
 - **Debt destinations** — the debt pool, the operator queue (work only a human can do), the branch
   triage file (branches that could not land), and any plan files that are kept rather than deleted.
+  Optionally a debt **intake** directory: `/land` then writes each plan's leftovers to
+  `<dir>/<slug>.md` instead of editing the pool, and `/debt-review` folds them in — worth declaring
+  once parallel landings start conflicting on the pool file.
 - **Read-only production check** — the diagnostic `/debt-review` may use to confirm operator work is
   done.
 
@@ -147,6 +150,7 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 | `deliver-decides-alone` | `/deliver` asking the operator at a fork instead of deciding and logging it |
 | `land-on-green-verdict` | `Handoff: both` plus a green `DELIVERED`, and nobody invokes `/land` |
 | `land-holds-on-red` | the guard for the case above: a `gates: RED` verdict must not land |
+| `land-files-debt-to-intake` | a `/land` that writes a plan's debt leftovers into the pool file when the declaration names an intake directory — the edit two parallel landings conflict on |
 
 Every case is a **dry run**: Bash, Write and Edit are withheld, so no worktree, tmux session or push
 ever happens. The prompt supplies each script's output, and the model writes the commands and files it

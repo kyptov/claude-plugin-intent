@@ -54,6 +54,22 @@ and say so in the report — never drop them.
 | `## Out of scope` entry that is **a boundary, not a gap** — version-deferred by design, another doc's scope, "do not helpfully add this" | dropped; it was scope, never debt |
 | `## Decisions (agent-made)` | already carried by the squash commit body (§3) — do not duplicate |
 
+**If the declaration names a debt *intake* directory, the debt-pool items never touch the pool
+file.** Write them as one new file, `<intake dir>/<slug>.md`, grouped under the pool subsection each
+belongs in:
+
+```markdown
+# Swept from the retired <slug> plan
+
+## <pool subsection, exactly as the pool heads it>
+
+- <item, in the pool's own item format>
+```
+
+The file name is this plan's slug, so no other landing can ever write it, and `/debt-review` folds it
+into the pool later. The operator queue is unaffected — it is still edited in place, because a human
+action has to be visible before the next deploy, not at the next review.
+
 Each filed item gets: the date, one sentence of what and why it matters, and `*(swept from the
 retired <slug> plan)*` so a reader can find the commit. **Verify before you file** — an item deferred
 weeks ago is often already done by later work, and filing a resolved item is worse than filing
@@ -67,8 +83,9 @@ Then `git rm` the plan file, unless `.claude/workflow.md` names it as deliberate
 becomes a dead link the moment the plan is gone. Repoint each hit at the landing commit hash or the
 canon doc, in this same commit.
 
-Two runs landing at once both append here, so a conflict on the debt files is expected and always
-resolves the same way: **take both sides.** Never drop the other run's items to make a rebase clean.
+Two runs landing at once both append to any ledger edited in place (the operator queue always, the
+pool when there is no intake directory), so a conflict there is expected and always resolves the
+same way: **take both sides.** Never drop the other run's items to make a rebase clean.
 
 ## 3. Write the squash message
 

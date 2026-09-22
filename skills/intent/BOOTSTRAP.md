@@ -69,9 +69,10 @@ CHECKS — the exit code is the interface:
   0   Well-formed.
   64 usage · 65 not a git repo · 66 no such plan.
 
-ADVISORY, never fatal: intersect the plan's `- Files:` paths with the debt pool and print the
-entries that mention them, so the plan can name the debts it would close. The pool's problem is
-drain, not intake, and an incidental fix that goes unrecorded is a real loss.
+ADVISORY, never fatal: intersect the plan's `- Files:` paths with the debt pool (and every file
+in the debt intake directory, when the declaration names one) and print the entries that mention
+them, so the plan can name the debts it would close. The pool's problem is drain,
+not intake, and an incidental fix that goes unrecorded is a real loss.
 
 --set-handoff <value>: rewrite the `Auto:` line under `## Handoff` and exit. This is /intent §6's
 "write the answer BEFORE you do anything else with it" — the recovery path if that turn dies, because

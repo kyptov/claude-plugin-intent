@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: land-files-debt-to-intake
+context:
+  scaffold_script: fixture.sh

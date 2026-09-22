@@ -20,11 +20,27 @@ This skill exists because a pool that only accretes stops being read: recording 
 handling it, and nothing else in the workflow ever re-opens one. `/land` files items; this skill is the only thing
 that takes them out.
 
-**You are read-only on source code.** You delete lines from two ledger files and you commit that.
+**You are read-only on source code.** You fold the intake into the pool, delete lines from the two
+ledger files, and commit that.
 You never fix a debt, never touch source, never open a plan. Fixing is `/intent` →
 `/deliver`, and conflating the two is how a review turns into an unscoped 4-hour run.
 
 ---
+
+## 0a. Fold the intake into the pool
+
+If the declaration names a debt **intake** directory, `/land` writes each landed plan's leftovers
+there as `<slug>.md` instead of editing the pool — one file per landing, so parallel landings never
+conflict on the pool. This skill is the only thing that moves them in, and it does so first, so every
+later step sees one pool:
+
+1. For each intake file, move every item into the pool under the subsection its `## ` heading
+   names, at the top of that subsection. Keep the item text exactly as filed. A heading the pool
+   does not have goes to the closest subsection — never invent a new one.
+2. `git rm` the intake file once all its items are in. Leave any non-item file (a `.gitkeep`) alone.
+
+Folding is bookkeeping, not review: do not verify, rewrite or drop an item while moving it. Items
+filed since the last review are what §2's verification finds; §1 counts them as filed this month.
 
 ## 1. Measure first, so the trend is visible
 
@@ -163,8 +179,9 @@ debt pull, and it must never be counted as one of the parallel 2–3.
 
 ## 6. Commit, then report in plain words
 
-Commit the two ledger files alone, in the project's conventional-commit style, subject in product
-terms and body listing what closed and why. Run the project's lint gate; a docs-only change needs no
+Commit the two ledger files and the folded intake files alone, in the project's conventional-commit
+style, subject in product terms and body listing how many items were folded in and what closed and
+why. Run the project's lint gate; a docs-only change needs no
 more than that. Never commit alongside source changes — a review that also touches code cannot be
 read.
 
