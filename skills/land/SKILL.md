@@ -75,6 +75,17 @@ weeks ago is often already done by later work, and filing a resolved item is wor
 nothing because it makes the pool untrustworthy. One read-only check is enough; if it is already
 done, say so in the report and file nothing.
 
+**Close what the plan fixed, in the same file.** A plan names the pool items its slices fix
+(`/intent` writes them as the plan's *closes debt* list). Verify each one read-only against the
+worktree; for every one the code now resolves, add it under a `## Closed by this landing` heading in
+the same intake file — its pool subsection and verbatim bold title, one per line. `/debt-review`
+deletes those from the pool when it folds the file in. With no intake directory, list them in the
+commit body instead; `/land` still never deletes a pool line itself.
+
+**Update the goal the plan serves.** If the plan names a goal from the declaration's goals file,
+rewrite that goal's `Status:` line to what is true once this lands (present tense, one line). Never
+delete the goal — only the operator closes a goal, through `/next`.
+
 Then `git rm` the plan file, unless `.claude/workflow.md` names it as deliberately kept.
 
 **Before you delete it, check nothing in the tree points at it:**

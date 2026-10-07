@@ -37,7 +37,10 @@ later step sees one pool:
 1. For each intake file, move every item into the pool under the subsection its `## ` heading
    names, at the top of that subsection. Keep the item text exactly as filed. A heading the pool
    does not have goes to the closest subsection — never invent a new one.
-2. `git rm` the intake file once all its items are in. Leave any non-item file (a `.gitkeep`) alone.
+2. A `## Closed by this landing` section lists pool items that landing fixed (verified at landing):
+   delete each from the pool by its verbatim bold title and count it as closed in §1. A title the
+   pool no longer has is already gone — skip it.
+3. `git rm` the intake file once all its items are in. Leave any non-item file (a `.gitkeep`) alone.
 
 Folding is bookkeeping, not review: do not verify, rewrite or drop an item while moving it. Items
 filed since the last review are what §2's verification finds; §1 counts them as filed this month.
@@ -199,8 +202,10 @@ it is smaller and trustworthy, and which two or three things they can start righ
 
 ## 7. Cadence
 
-Weekly is right; the pool moves too slowly to reward more and too fast to survive less. Two ways to
-put it on a clock, both the operator's call, neither started by this skill:
+Weekly is right; the pool moves too slowly to reward more and too fast to survive less. `/next`
+starts this skill in the background whenever the pool's last review is older than 7 days, so an
+operator who asks "what next" gets the cadence for free. Two ways to put it on a strict clock
+instead, both the operator's call, neither started by this skill:
 
 - `/loop 7d /debt-review` — self-paced, needs a live session.
 - the `schedule` skill — a cloud routine, survives a closed laptop.

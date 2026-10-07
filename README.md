@@ -10,6 +10,7 @@ runs unattended in its own git worktree until the feature lands on the trunk as 
 | `/deliver` | execute a plan to completion with zero interaction, logging every decision it makes alone |
 | `/land` | squash-merge a finished worktree branch onto the trunk |
 | `/debt-review` | drain the carried-debt pool into the next `/intent` wave |
+| `/next` | "what next?" in one screen: closes goals from commits, ranks in-flight work, goals, roadmap, operator queue and debt into three paste-ready commands; captures a goal the moment you state one |
 | `/transcribe` | local audio/video → text (mlx-whisper; needs `ffmpeg` and `uv`) |
 
 ## How a feature moves
@@ -31,7 +32,11 @@ runs unattended in its own git worktree until the feature lands on the trunk as 
    the worktree and branch.
 
 `/debt-review` runs on a cadence (weekly) and turns the debt pool back into ready-to-paste `/intent`
-commands.
+commands. `/next` starts it in the background when the pool's last review is over a week old.
+
+Goals the operator states in conversation ("task: …") go into the project's goals file; `/next`
+rewrites each goal's status from the commits since its last run and deletes a goal only after the
+operator confirms it is done.
 
 ## Requirements
 

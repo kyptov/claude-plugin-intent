@@ -8,7 +8,7 @@
     {
       "name": "workflow",
       "source": "./",
-      "description": "Two-phase workflow skills: intent, dispatch, deliver, land, debt-review, transcribe."
+      "description": "Two-phase workflow skills: intent, dispatch, deliver, land, next, debt-review, transcribe."
     }
   ]
 }

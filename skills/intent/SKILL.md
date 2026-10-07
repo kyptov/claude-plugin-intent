@@ -133,8 +133,12 @@ every section. Rules:
   gets treated as a boundary and disappears.
 - **Name the debt-pool items this plan would touch.** Read the pool — and the declaration's debt
   intake directory, if it names one: items landed since the last `/debt-review` wait there — before
-  writing the slices; if a slice would incidentally fix a listed debt, say which, so `/land` can
-  close it. Overlap is invisible in both directions otherwise, and the pool's problem is drain, not intake.
+  writing the slices; if a slice would incidentally fix a listed debt, list it (subsection + verbatim
+  bold title) as the plan's *closes debt* line, so `/land` can close it. Overlap is invisible in both
+  directions otherwise, and the pool's problem is drain, not intake.
+- **Name the goal this plan serves.** If the declaration names a goals file and one of its goals is
+  what this plan advances, write that goal's title as the plan's *serves goal* line — `/land` updates
+  the goal's status from it, and `/next` stops recommending work that is already planned.
 - **One latest version, no history.** If you revise the plan mid-interview, rewrite the section.
   Never append "changed from X to Y" — the operator has asked for this explicitly and the project's doc
   rules forbid narrating how a doc got to its current state.
