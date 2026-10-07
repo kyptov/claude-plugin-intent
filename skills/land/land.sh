@@ -6,13 +6,14 @@
 #   land.sh <worktree-path> --message-file <file> --gates "<the declaration's full gate line>"
 #           [--extra-gate "<cmd>"]... [--teardown "<cmd run inside the worktree before removal>"]
 #           [--trunk <branch>] [--attempts 3] [--lock-wait <minutes>]
-#   env: WT_BRANCH_PREFIX (default wt) — the branch namespace, same knob as watch-runs.sh
 #
-# Project-agnostic: gates and teardown come from the project's .claude/workflow.md via flags.
+# Project-agnostic: gates and teardown come from the project's .claude/workflow.md via flags. Without
+# --teardown, the project's `.claude/scripts/dispatch/worktree-teardown.sh <worktree>` runs when it
+# exists — the same script the WorktreeRemove hook runs, so both ways a worktree ends tear down alike.
 #
 # Sequence: land lock → squash (reset --soft to merge-base + one commit) → up to N × (fetch, rebase
-# onto the trunk TIP, gates, fast-forward the main checkout) → push → kill the run's tmux session →
-# per-worktree teardown → remove worktree + branch → release lock. Exit codes name the failure so the
+# onto the trunk TIP, gates, fast-forward the main checkout) → push → per-worktree teardown → remove
+# worktree + branch → release lock. Exit codes name the failure so the
 # skill can route it:
 #   0 landed   20 rebase conflict (branch + worktree left as they are)   21 gates red after rebase
 #   22 push refused   23 fast-forward refused 3× (trunk kept moving)   24 empty squash (nothing to land)
@@ -49,7 +50,6 @@
 set -uo pipefail
 
 wt=""; msgfile=""; gates=""; extra=""; teardown=""; trunk=""; attempts=3; lock_wait=25
-prefix=${WT_BRANCH_PREFIX:-wt}
 while [ $# -gt 0 ]; do
   case "$1" in
     --message-file) msgfile=$2; shift 2 ;;
@@ -75,11 +75,9 @@ wt=$(cd "$wt" && pwd)
 common=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || { echo "not a worktree" >&2; exit 65; }
 repo=$(dirname "$common")
 [ "$repo" != "$wt" ] || { echo "$wt is the main checkout, not a worktree" >&2; exit 65; }
-proj=$(basename "$repo")
 [ -n "$trunk" ] || trunk=$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
 [ -n "$trunk" ] || trunk=main
 branch=$(git -C "$wt" symbolic-ref --short HEAD) || { echo "worktree is not on a branch" >&2; exit 65; }
-slug=${branch#"$prefix"/}
 
 lock="$repo/.claude/land.lock"
 mkdir -p "$repo/.claude"
@@ -88,8 +86,8 @@ release() { [ "$held_lock" = 1 ] && rm -rf "$lock"; }
 trap release EXIT
 
 # The cockpit this landing belongs to, for the waiter's message only — never for liveness. Walk up
-# to the `claude` ancestor and read the name Claude Code records for that pid, the same registry
-# cockpit-addr.sh resolves against. Best-effort: an unnamed or unresolvable session is not an error.
+# to the `claude` ancestor and read the name Claude Code's session registry records for that pid.
+# Best-effort: an unnamed or unresolvable session is not an error.
 owner_session() {
   p=$$ ; n=0
   while [ "$n" -lt 8 ] && [ "${p:-1}" -gt 1 ]; do
@@ -202,8 +200,10 @@ git -C "$repo" push -q origin "$trunk" || exit 22
 hash=$(git -C "$repo" rev-parse --short HEAD)
 subject=$(git -C "$repo" log -1 --format=%s)
 
-echo "==> kill the run's session, then tear down, then remove — in that order"
-tmux -L "impl-$proj" kill-session -t "impl-$proj-$slug" 2>/dev/null || true
+echo "==> tear down, then remove — in that order"
+if [ -z "$teardown" ] && [ -x "$repo/.claude/scripts/dispatch/worktree-teardown.sh" ]; then
+  teardown="\"$repo/.claude/scripts/dispatch/worktree-teardown.sh\" \"$wt\""
+fi
 if [ -n "$teardown" ]; then
   (cd "$wt" && eval "$teardown") || echo "WARN: per-worktree teardown failed — continuing the landing (gc will sweep)" >&2
 fi

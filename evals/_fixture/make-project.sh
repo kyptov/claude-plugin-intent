@@ -116,8 +116,9 @@ All under `.claude/scripts/`.
 - **Binding rules:** `CLAUDE.md`.
 - **Users** (for `/intent`'s plain-words questions): the operator watching runs on the dashboard,
   and a teammate reading a shared run link.
-- **Worktree setup:** `--install "npm ci"`. No sync step.
-- **Branch namespace:** `wt/<slug>`. **Session tag:** `dm` (`launch-run.sh --tag dm`).
+- **Worktree setup:** the worktree hook's default (install inferred from the lockfile). No sync step,
+  no setup script.
+- **Branch namespace:** `wt/<slug>`.
 - **Deploy commands** (never run by `/deliver` or `/land`): `npm run deploy`.
 - **Branch triage file:** `docs/planning/branch-triage.md`.
 

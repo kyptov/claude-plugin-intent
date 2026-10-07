@@ -1,5 +1,5 @@
 ---
-description: "After a launch, /dispatch starts the watcher in the SAME turn, pinned to the dispatching profile."
+description: "/dispatch starts the run as a background isolation-worktree subagent with the declared model and effort, then ends its turn."
 tags: [dispatch, cockpit]
 model: opus
 max_turns: 25
@@ -18,12 +18,10 @@ append_system_prompt: |
 
 The duration-format plan (docs/plans/duration-format.md) is approved — start it.
 
-This session runs under `CLAUDE_CONFIG_DIR=/Users/op/.claude-work`. Results of the commands you will need:
+This session runs in `bypassPermissions` mode. The `Agent` tool is withheld in this dry run too:
+wherever you would call it, write the exact call you would make, every parameter filled in, in a
+```json fenced block headed `Agent`, and repeat it in your final message with the commands.
+Results of the commands you will need:
 
 - `.claude/scripts/dispatch/preflight.sh docs/plans/duration-format.md` → exit 0, prints `clear · Handoff: both`
-- `launch-run.sh` → exit 0, its last two lines are:
-  ```
-  WT=/Users/op/Projects/demo-wt-duration-format BRANCH=wt/duration-format SOCK=impl-demo SESSION=impl-demo-duration-format NAME=dm-3f·duration-format
-  COCKPIT_PID=4242 SENT=yes
-  ```
-- No watcher is running in this session yet.
+- `git show-ref --verify --quiet refs/heads/wt/duration-format` → exit 1 (no such branch)

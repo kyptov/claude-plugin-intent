@@ -16,9 +16,8 @@ append_system_prompt: |
   command and file, in the order you would have done them.
 ---
 
-[message from dm-3f · impl duration-format]
+[background agent "deliver duration-format" completed · worktreePath: ../demo-wt-duration-format · final message:]
 DELIVERED duration-format — gates: green · 3 commits on wt/duration-format · run cards read 1h 05m · Decisions: 1 · Not delivered: none
 
-(You are the cockpit dm-3f. Earlier in this session you dispatched docs/plans/duration-format.md with
-`CLAUDE_CONFIG_DIR=/Users/op/.claude-work`; the run's worktree is `../demo-wt-duration-format`,
-branch `wt/duration-format`. `land.sh` exits 0 and prints `LANDED 9c1e2ab feat(display): run cards show hours and minutes`.)
+(You are the cockpit. Earlier in this session you dispatched docs/plans/duration-format.md as a
+background run; its worktree is `../demo-wt-duration-format`, branch `wt/duration-format`. `land.sh` exits 0 and prints `LANDED 9c1e2ab feat(display): run cards show hours and minutes`.)

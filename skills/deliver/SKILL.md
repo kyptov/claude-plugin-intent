@@ -24,23 +24,8 @@ stated their preference precisely, and it governs every judgement call in this s
 
 **So: a fork in the road is a decision to log, never a reason to stop.**
 
-**Note who dispatched you — §7 has to report back to them.** Run this now, and again in §7:
-
-```sh
-"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/cockpit-addr.sh
-```
-
-It prints the cockpit's name **as of right now**, resolved from the sessionId `/dispatch` recorded at
-launch. Use what it prints; do not use the `cockpit: <name>` that came with your plan.
-
-**A session name is not a stable address.** Claude Code's conversation auto-titler overwrites the
-name `/dispatch` gave your cockpit within seconds, so the name you were handed is likely dead by the
-time you finish. Your own name is safe (you were born with it), so `<tag>-<hex> · impl <slug>` still
-tells you the pairing key — that is the resolver's last fallback, not your first move.
-
-If the resolver exits non-zero it means no live session matches — a genuinely absent cockpit. Say so
-in your final report and do not guess a name. Run it at §0 anyway: a resolver that already fails now
-is worth knowing about before you spend an hour on the plan.
+**You are a background subagent of the cockpit that dispatched you.** Your final message is your
+report: it reaches the cockpit as your completion notification, and nobody else reads it (§7).
 
 ---
 
@@ -57,6 +42,19 @@ the worktree for you.
 This is one git command and it is not negotiable. Plans are never delivered in the main checkout:
 concurrency is global, so several runs can each see an empty room and interleave their features into
 one unreviewable working tree.
+
+**Then name your branch after the plan — before preflight, which keys its state by the branch.** The
+worktree hook made it `<prefix>/agent-<id>`, because it is handed an agent id, never the plan. Rename it
+to `<prefix>/<slug>`: the declaration's branch namespace (default `wt`), and the plan's file name
+without `.md` and without a trailing `-plan`. `/land`, the dispatch preflight and the report all find
+your work by that name.
+
+```sh
+[ "$(git branch --show-current)" = "<prefix>/<slug>" ] || git branch -m "<prefix>/<slug>"
+```
+
+If the rename fails because `<prefix>/<slug>` already exists, an earlier run of this plan is unlanded:
+stop, and say so in your report.
 
 ## 0c. The mechanics scripts — no script, no run
 
@@ -151,30 +149,29 @@ to need a decision that qualifies as a stop reason above.
 
 ## 5. Orchestration
 
-For a plan with independent slices, run them through `Workflow` — pipeline, not barrier, so slice 2
-implements while slice 1 is being reviewed:
+Implement the slices **in order, in this session.** Parallelism is the cockpit's call, made by which
+plans it dispatches together; a plan whose slices could run side by side is a plan `/intent` should
+have split.
 
-```
-pipeline(slices,
-  s => agent(implement(s),      {model: <impl model>, effort: <impl effort>, phase: 'Implement'}),
-  r => agent(gate(r),           {model: <impl model>, effort: <impl effort>, phase: 'Gate'}),
-  r => agent(review(r),         {model: <impl model>, effort: 'high',        phase: 'Review'}))
-```
+Two stages run in a nested `Agent` instead of inline, because they need a different model or effort:
 
-Model and effort come from the declaration's model policy. Use its adversarial-review effort on the
-review stage for any slice touching an area it flags (authorization, tenancy, redaction, money…). Slices that share a file must be sequential, not parallel — check before fanning out.
+- **Review** — a slice touching an area the declaration's model policy flags (authorization, tenancy,
+  redaction, money…) gets an adversarial review at the policy's review effort before its commit.
+- **Escalation** — `gate.sh`'s second red (§2) re-attempts that slice at the escalation model/effort.
+
+Run every one of them, and every gate, in the **foreground**. A run whose turn ends has ended:
+background work it left behind finishes after your report has already gone.
 
 Keep context small: work from the plan file, not from an investigation transcript. **Read only the
 `## Canon sections` the plan names** — companion docs are often long and the plan already
 says which sections govern this work; open a whole doc only when a slice contradicts the section you
 were given. Follow the `context-explorer`-first rule for anything you need to locate.
 
-## 5a. Output discipline — nobody is reading your pane
+## 5a. Output discipline — nobody is reading your transcript
 
 **Nobody reads a dispatched run's transcript.** The operator's channels are the plan file, the commits,
-and §7's one-line cockpit message; the pane is watched only to catch a run parked on a dialog. So prose
-in the pane is pure cost — written into context once and re-read on every turn after it, at the
-model's cache-read rate for the rest of the run.
+and §7's one-line report. So prose in the transcript is pure cost — written into context once and
+re-read on every turn after it, at the model's cache-read rate for the rest of the run.
 
 Three rules, all of them cost rules and all of them safe *because this skill only ever runs in a
 worktree* (§0b):
@@ -182,7 +179,7 @@ worktree* (§0b):
 1. **No narration.** No "now I'll…", no plan recap, no per-slice explanation, no closing summary of
    what the diff already says. Per slice, the only text you owe is its commit subject. Reasoning
    belongs in the commit body and the plan's `## Decisions (agent-made)` — durable places — never in
-   the pane.
+   the transcript.
 2. **Never re-read a file you just edited.** `Edit`/`Write` fail loudly if they do not apply, and the
    harness tracks file state, so a confirmation read buys nothing and costs its own size on every
    later turn. **This rule is worktree-only and does not generalise** — in a shared main checkout
@@ -195,8 +192,7 @@ worktree* (§0b):
 ## 6. Final report
 
 **Items 2 and 3 below go into the plan file, and that is what makes them matter** — `/land` sweeps
-them from there. Do not also spell them out in the pane. Your pane ending is three lines: the files
-you changed, `done`, and then §7's message. Nothing else.
+them from there. Do not also spell them out in your final message: it is §7's report and nothing else.
 
 Write items 2 and 3 into the plan, then run the project's **`report.sh <plan>`**. It refuses an
 untagged `## Not delivered` entry and a `gates: green` the full-graph run never earned, and it prints
@@ -215,38 +211,19 @@ recalled.
    unrun production backfill nobody remembers.
 4. **What needs your call** — only if a stop reason fired.
 
-## 7. Report to the cockpit — explicitly, as your last action
+## 7. Report to the cockpit — your final message
 
-The cockpit does not watch your pane. **Send it one message, yourself, after the four things above** —
-`report.sh` prints its `SUMMARY:` and `MESSAGE:` lines ready to paste, so send those verbatim rather
-than re-composing them.
-
-**Re-resolve the address first — do not reuse what §0 printed.** Your cockpit may have been re-titled
-during the hour you were working, which is the normal case, not a rare one:
-
-```sh
-"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/cockpit-addr.sh
-```
+Your final message is the cockpit's whole view of this run. `report.sh` prints its `SUMMARY:` and
+`MESSAGE:` lines ready to paste; end on the `MESSAGE:` line verbatim, rather than re-composing it:
 
 ```
-SendMessage({to: "<what cockpit-addr.sh just printed>",
-             summary: "<slug> delivered",
-             message: "DELIVERED <slug> — gates: green | RED | not-run · <N> commits on wt/<slug> · <one line: what shipped> · Decisions: <count> · Not delivered: <one line, or none>"})
+DELIVERED <slug> — gates: green | RED | not-run · <N> commits on wt/<slug> · <one line: what shipped> · Decisions: <count> · Not delivered: <one line, or none>
 ```
 
-Send it whether you finished or gave up — `gates: RED` and a stop reason are a *result*, and a cockpit
-that hears nothing has to guess between "still working", "wedged", and "dead".
+Before it come the files you changed and `done`. Nothing else.
 
-**If the send fails, or `cockpit-addr.sh` exits non-zero, print the whole `MESSAGE:` line as the last
-thing in your final report and say the cockpit was unreachable.** That line in your pane, plus
-`.claude/deliver-state/<slug>/verdict`, is a complete verdict — an undeliverable report is a delivery
-failure, never a missing judgement, and whoever comes looking can land on it. Do not guess a name,
-and do not send the report to some other session you happen to see in `ListAgents`: a stranger cannot
-tell your report from a message meant for them.
-
-**Why this is your job and not something the cockpit can infer.** A session that hands work to
-`Workflow`, to a background `Agent`, or to a background `Bash` **ends its turn immediately**, and the
-harness reports it as *idle* to anyone watching while the work is still running; that idle notice is
-**one-shot**, so a false fire leaves the real completion no channel. Nothing the cockpit can observe distinguishes "finished the plan" from
-"handed the plan to a workflow and stopped typing". Only you know which happened, so only you can say
-it. If §5's pipeline is running, this message goes after it returns — not when you launch it.
+End on it whether you finished or gave up — `gates: RED` and a stop reason are a *result*, and a
+cockpit that gets a final message without a verdict has to guess between "finished", "gave up" and
+"crashed". The cockpit lands on `gates: green` and on nothing else, so the line must be the one
+`report.sh` printed, not a paraphrase. `.claude/deliver-state/<slug>/verdict` holds the same verdict
+for whoever comes looking if this message is lost.

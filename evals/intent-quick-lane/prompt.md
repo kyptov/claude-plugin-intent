@@ -18,12 +18,11 @@ append_system_prompt: |
 
 /intent --quick the run card line should separate the name and the duration with " · " instead of the em-dash
 
-This session runs under `CLAUDE_CONFIG_DIR=/Users/op/.claude-work`. Results of the commands you will need:
+This session runs in `bypassPermissions` mode. The `Agent` tool is withheld in this dry run too:
+wherever you would call it, write the exact call you would make, every parameter filled in, in a
+```json fenced block headed `Agent`, and repeat it in your final message with the commands.
+Results of the commands you will need:
 
 - `.claude/scripts/intent/plan-check.sh` → exit 0 on whatever plan you give it.
 - `.claude/scripts/dispatch/preflight.sh <plan>` → exit 0, prints `clear · Handoff: both`
-- `launch-run.sh` → exit 0, its last two lines are:
-  ```
-  WT=/Users/op/Projects/demo-wt-run-card-separator BRANCH=wt/run-card-separator SOCK=impl-demo SESSION=impl-demo-run-card-separator NAME=dm-3f · impl run-card-separator
-  COCKPIT_PID=4242 SENT=yes
-  ```
+- `git show-ref --verify --quiet refs/heads/wt/<slug>` → exit 1 (no such branch)

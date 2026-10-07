@@ -26,10 +26,9 @@ behind quietly.**
 ## 1. What is a script and what is judgment
 
 Everything mechanical about a landing — the land lock, the squash, the rebase→gates→fast-forward
-loop, the push, killing the run's `tmux` session, the per-worktree teardown, removing the worktree
-and branch, releasing the lock — is **one script next to this skill**, `land.sh`. You run it once,
-after the two judgment steps below (§2 the sweep, §3 the message). Never re-derive that sequence by
-hand.
+loop, the push, the per-worktree teardown, removing the worktree and branch, releasing the lock — is
+**one script next to this skill**, `land.sh`. You run it once, after the two judgment steps below (§2
+the sweep, §3 the message). Never re-derive that sequence by hand.
 
 ## 2. Sweep the plan into the debt files — before the squash
 
@@ -114,7 +113,9 @@ then* run the full gates, which outlasts a foreground tool call; a killed tool c
 thing that can strand the lock (the script releases it on every other exit).
 
 `--gates` is required and is the declaration's full gate line; trunk defaults to `origin/HEAD`, 3
-attempts, branch namespace `WT_BRANCH_PREFIX` (default `wt`). The
+attempts. Without `--teardown`, the project's `.claude/scripts/dispatch/worktree-teardown.sh` runs when
+it exists — the counterpart of the setup script the worktree hook ran, so pass `--teardown` only for a
+project that declares some other command. The
 script: takes `.claude/land.lock`, **waiting up to `--lock-wait` minutes (default 25) when another
 landing holds it** — two landings overlapping in a wave is the normal case, so the second one queues
 instead of bouncing back to you; it takes a lock over at once when its owning process is gone.
@@ -125,16 +126,15 @@ needs about `--lock-wait 50`: three rebase attempts each re-run it). Then it squ
 report that rather than landing a no-op); then up to 3 × { `git fetch`, `git rebase origin/<trunk>`,
 gates, `merge --ff-only` in the main checkout } — **re-running the gates after every rebase**,
 because `main` moved and the previous green described a tree that no longer exists; then pushes;
-then **kills the run's session first, tears down second, removes the directory third** (a live
-session in a removed directory fails its Stop hook every turn, and the teardown derives its target
-from the worktree's own path). Teardown failure warns and continues: it must never block a green land. Last line on
-success: `LANDED <hash> <subject>`.
+then **tears down first and removes the directory second** (the teardown derives its target — a
+database, a port — from the worktree's own path). Teardown failure warns and continues: it must never
+block a green land. Last line on success: `LANDED <hash> <subject>`.
 
 ## 5. Read the exit code, then confirm
 
 | Exit | Meaning | Your move |
 |---|---|---|
-| 0 | landed and pushed | confirm with `ListAgents` + `git worktree list` that the `impl:` row and the worktree are gone, then report the hash and what landed in product terms |
+| 0 | landed and pushed | confirm with `git worktree list` that the worktree is gone, then report the hash and what landed in product terms |
 | 20 | rebase conflict; branch + worktree untouched | §6 |
 | 21 | gates red after rebase | §6 |
 | 22 | push refused | §6 (never `--force`) |
@@ -163,6 +163,6 @@ Nothing to do here by hand: `/dispatch` §1 runs the project's dispatch prefligh
 lists every unlanded branch and **blocks only when one overlaps the next plan's files** (its exit
 12).
 
-What is worth doing after a green land is confirming the pair the landing removes — the `impl:` row
-is gone from `ListAgents` and the worktree is gone from `git worktree list` (§5, exit 0). A branch
-that survives its own landing is the backlog this skill exists to prevent.
+What is worth doing after a green land is confirming what the landing removes — the worktree is gone
+from `git worktree list` and the branch from `git branch` (§5, exit 0). A branch that survives its own
+landing is the backlog this skill exists to prevent.

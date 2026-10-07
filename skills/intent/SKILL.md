@@ -252,8 +252,8 @@ and because the blocking resource is the operator, not the agent. Serialising in
 serialise the operator's answering. Run as many as they can answer
 round-robin, about three.
 
-**So dispatch from here; never hand the plan to another session.** `/deliver` §7 reports `DELIVERED`
-to whoever dispatched it, so the session that dispatched is the session that must be alive to hear it
-and the session that lands the branch. Everything else about owning a run — the watcher, which
-signals mean what, and the three seams where the relay drops the baton — lives in `/dispatch` §0b,
-§5 and §6, which is where you will be when it matters. It is not repeated here.
+**So dispatch from here; never hand the plan to another session.** A run is a background subagent of
+the session that dispatched it: its `DELIVERED` report comes back to that session only, so that is
+the session that must stay alive to hear it and the session that lands the branch. Everything else
+about owning a run — which signal means done, and the seams where the relay drops the baton — lives
+in `/dispatch` §0b, §4 and §5, which is where you will be when it matters. It is not repeated here.

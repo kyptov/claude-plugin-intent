@@ -69,8 +69,8 @@ RULES for all of them:
   Nested inside `$( … )`, a case pattern needs a leading `(` — `case $x in (a|b) … ;; esac` — or
   bash 3.2 mis-parses the closing paren and dies with a syntax error.
 - Output discipline: ONE line per gate on success, and only the last ~15 lines of a failing gate's
-  log. Full logs go to the state dir. Nobody reads a dispatched run's pane, so every line printed is
-  paid for again on every later turn of that run.
+  log. Full logs go to the state dir. Nobody reads a dispatched run's transcript, so every line printed
+  is paid for again on every later turn of that run.
 - If the project's gates need a wrapper to reach a resource (a relay, a tunnel, a VPN helper), have
   the script RE-EXEC ITSELF under that wrapper, idempotently. Wrapping the script wraps the gates and
   the regeneration steps, which are its children; passing a pre-wrapped command string does not.

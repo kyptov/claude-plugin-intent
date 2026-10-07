@@ -6,7 +6,7 @@ runs unattended in its own git worktree until the feature lands on the trunk as 
 | Skill | Job |
 |---|---|
 | `/intent` | interview the operator, write the plan contract; `--quick` skips the interview for a small visible tweak |
-| `/dispatch` | create the worktree, launch the unattended `/deliver` run, watch it |
+| `/dispatch` | launch the unattended `/deliver` run as a background subagent in a worktree of its own |
 | `/deliver` | execute a plan to completion with zero interaction, logging every decision it makes alone |
 | `/land` | squash-merge a finished worktree branch onto the trunk |
 | `/debt-review` | drain the carried-debt pool into the next `/intent` wave |
@@ -18,12 +18,14 @@ runs unattended in its own git worktree until the feature lands on the trunk as 
    feature does. The agent decides *how* on its own, writes a plan contract (intent, your answers,
    slices with verify commands, what is out of scope), briefs you in a few paragraphs, and asks one
    question: build it, or just save the plan. The plan is committed on the trunk.
-2. **`/dispatch`** creates a worktree on `wt/<slug>`, starts a Claude Code Remote Control session in
-   a per-project `tmux` socket, and hands it `/deliver <plan>`. The session that dispatched (the
-   *cockpit*) arms a watcher and waits.
-3. **`/deliver`** runs in the worktree with no questions allowed: forks are decided against the plan's
-   intent and logged in the plan, each slice is gated and committed, and the run reports
-   `DELIVERED <slug> — gates: green | RED` back to the cockpit.
+2. **`/dispatch`** starts `/deliver <plan>` as a background subagent with the plan's model and
+   effort and `isolation: "worktree"`. The plugin's `WorktreeCreate` hook builds that worktree first —
+   branch, install, and the project's own per-worktree setup, such as a database of its own. The
+   session that dispatched (the *cockpit*) ends its turn and waits to be notified.
+3. **`/deliver`** runs in the worktree with no questions allowed: it names its branch `wt/<slug>`,
+   decides forks against the plan's intent and logs them in the plan, gates and commits each slice,
+   and ends on `DELIVERED <slug> — gates: green | RED`, which reaches the cockpit as the subagent's
+   completion notification.
 4. **`/land`**, on a green verdict: files the plan's leftovers into the project's debt files, squashes
    the branch into one commit, rebases, re-runs the gates, fast-forwards the trunk, pushes, and removes
    the worktree and branch.
@@ -34,7 +36,7 @@ commands.
 ## Requirements
 
 - macOS. The scripts target `/bin/bash` 3.2 and use BSD `stat`, `lsof` and `ps`.
-- `git`, `tmux`, `jq`, `python3`, and the Claude Code CLI.
+- `git`, `jq`, and the Claude Code CLI.
 - For `/transcribe`: Apple Silicon, `ffmpeg`, and `uv`.
 
 ## Install
@@ -44,12 +46,20 @@ claude plugin marketplace add kyptov/claude-plugin-intent
 claude plugin install workflow@claude-plugin-intent
 ```
 
-**`CLAUDE_CONFIG_DIR` must be set in the session you dispatch from.** `launch-run.sh` refuses to run
-without it, pins it into the run's `tmux` command, and keeps runtime state (dispatch records, watcher
-state) under `$CLAUDE_CONFIG_DIR/dispatch-runs/`. With the default profile:
+**Run the cockpit in `bypassPermissions` mode.** A dispatched run is a subagent of the cockpit and
+inherits its permission mode; in any other mode the run parks on its first permission prompt.
+`/dispatch` refuses to start a run otherwise.
 
-```sh
-export CLAUDE_CONFIG_DIR="$HOME/.claude"    # in your shell profile
+**The plugin installs `WorktreeCreate` and `WorktreeRemove` hooks** in every project where it is
+enabled: every `isolation: "worktree"` agent's worktree is built by the plugin, and torn down by it
+when Claude Code discards one. In a project without `.claude/workflow.md` the hook makes the same plain
+worktree Claude Code makes on its own (`.claude/worktrees/<name>`, no setup).
+
+Runs' prompt cache follows `subagentPromptCacheTtl`, the cockpit's follows `promptCacheTtl`. A run's
+turns are back to back and a cockpit waits on runs for long stretches, so this split fits:
+
+```json
+{ "promptCacheTtl": "1h", "subagentPromptCacheTtl": "5m" }
 ```
 
 To work on the plugin itself, add a clone as a local directory marketplace instead. It is loaded **in
@@ -81,10 +91,11 @@ It names, in whatever headings suit you:
 - **Plans** — where plans live and which template they follow.
 - **Binding rules** — the project's rules file (e.g. `CLAUDE.md`), which wins over the declaration.
 - **Users** — who uses the product, so `/intent` can ask in their terms.
-- **Worktree setup** — the install command (`--install`) and any step that copies gitignored local
-  config into a new worktree (`--sync`).
-- **Branch namespace** (default `wt`) and **session tag**, a short project abbreviation used to pair a
-  cockpit with its runs (`launch-run.sh --tag`).
+- **Worktree setup** — what makes a new worktree gateable. Without a setup script the hook infers the
+  install from the lockfile and runs a `worktree:sync` package script if there is one; a project that
+  needs more (its own database per worktree) adds `.claude/scripts/dispatch/worktree-setup.sh` and
+  `worktree-teardown.sh` (step 3).
+- **Branch namespace** (default `wt`).
 - **Deploy commands** — listed so `/deliver` and `/land` know never to run them.
 - **Protected files** — secret/env files a run must stop before touching.
 - **Model policy** — implementation model and effort, the escalation after repeated red gates, and the
@@ -123,7 +134,7 @@ works on throwaway fixtures before it finishes.
 | Prompt | Builds | Without it |
 |---|---|---|
 | `skills/deliver/BOOTSTRAP.md` | `.claude/scripts/deliver/{preflight,gate,report}.sh` and a shared `lib.sh` | `/deliver` stops before the first edit |
-| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches | `/dispatch` stops |
+| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches; and, when worktrees need it, `worktree-{setup,teardown}.sh` | `/dispatch` stops (without the pair: install + `worktree:sync` only) |
 | `skills/intent/BOOTSTRAP.md` | `.claude/scripts/intent/plan-check.sh` — the one machine check on a plan before it is approved | `/intent` checks the plan by hand and says the script is missing |
 
 The three are independent; paste them in any order, or all in one session.
@@ -144,7 +155,7 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 
 | Case | Guards against |
 |---|---|
-| `dispatch-arms-watcher` | a wave launched with no `watch-runs.sh --watch` armed in the same turn, or armed without the dispatching profile |
+| `dispatch-spawns-run` | a run started anywhere but a background `isolation: "worktree"` subagent with the declared model and effort, or a cockpit that polls for it instead of ending its turn |
 | `intent-plan-passes-check` | a plan `plan-check.sh` would reject: missing section, template placeholder, slice without `- Files:`/`[verify]`, unmarked out-of-scope item; a plan left uncommitted |
 | `intent-quick-lane` | `/intent --quick` on a one-line tweak that still interviews, asks for approval, skips the plan commit (or sweeps other files into it), or stops short of `/dispatch` |
 | `deliver-decides-alone` | `/deliver` asking the operator at a fork instead of deciding and logging it |
@@ -152,7 +163,7 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 | `land-holds-on-red` | the guard for the case above: a `gates: RED` verdict must not land |
 | `land-files-debt-to-intake` | a `/land` that writes a plan's debt leftovers into the pool file when the declaration names an intake directory — the edit two parallel landings conflict on |
 
-Every case is a **dry run**: Bash, Write and Edit are withheld, so no worktree, tmux session or push
+Every case is a **dry run**: Bash, Write, Edit and Agent are withheld, so no worktree, run or push
 ever happens. The prompt supplies each script's output, and the model writes the commands and files it
 would produce into its reply, which the graders read. `--scaffold` builds the demo project
 (`evals/_fixture/make-project.sh`) as each run's workspace. Each case runs 3× with the plugin and 3×

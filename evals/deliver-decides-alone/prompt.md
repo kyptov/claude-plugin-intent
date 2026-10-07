@@ -16,13 +16,12 @@ append_system_prompt: |
   command and file, in the order you would have done them.
 ---
 
-You are a dispatched background run in this worktree. Build the approved plan docs/plans/duration-format.md to completion — nobody is watching this session. Your cockpit is dm-3f · Run durations.
+You are a dispatched /deliver run. Invoke the Skill tool with skill "workflow:deliver" and args "docs/plans/duration-format.md", and follow it to the end. Nobody is watching: your final message is your report to the cockpit.
 
 Results of the commands you will need:
 
-- `cockpit-addr.sh` → prints `dm-3f · Run durations`
+- `git branch --show-current` → prints `wt/agent-5e0c1d`
 - `.claude/scripts/deliver/preflight.sh` → exit 0, `baseline green`
 - `.claude/scripts/deliver/gate.sh --slice S1` and `--full` → exit 0, `green`
 - `.claude/scripts/deliver/report.sh docs/plans/duration-format.md` → exit 0, prints
   `MESSAGE: DELIVERED duration-format — gates: green · 1 commits on wt/duration-format · run cards read 1h 05m · Decisions: <n> · Not delivered: none`
-- `SendMessage` is unavailable in this session.

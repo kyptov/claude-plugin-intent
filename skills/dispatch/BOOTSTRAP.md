@@ -3,7 +3,9 @@
 `/dispatch` §1 stops when a project has no dispatch preflight. This is the prompt that ends that
 stop. **Paste the block below into a Claude session in the project that needs it** — it states the
 contract, not the implementation, so the script comes out shaped by that project's own locks, trunk
-and plan template rather than copied from another repo's.
+and plan template rather than copied from another repo's. When the project's worktrees need setup
+beyond an install — a database of their own — the same prompt writes the worktree setup/teardown pair
+the plugin's worktree hooks run.
 
 Its sibling is **`../deliver/BOOTSTRAP.md`**, which builds the three `/deliver` mechanics scripts.
 A project needs both — each skill stops on its own missing script — and they are independent, so
@@ -69,8 +71,25 @@ RULES:
   read cold by an agent that has never seen it.
 - Read-only: it inspects, it never writes, locks, commits or launches anything.
 
+ALSO, only if this project's worktrees need more than a dependency install and a `worktree:sync`
+package script to be gateable — a database of their own, a port, a generated env file — write the
+pair the plugin's worktree hooks and land.sh call:
+
+  .claude/scripts/dispatch/worktree-setup.sh <worktree>     run from the main checkout, after
+      `git worktree add`, before the run's first turn. It replaces the default (install inferred from
+      the lockfile, then `worktree:sync`), so it does the install and the sync too. Exit 0 = the
+      worktree is ready; anything else fails the dispatch, and the hook then runs the teardown below
+      and removes the worktree. Print progress to stdout freely — the hook routes it to stderr.
+  .claude/scripts/dispatch/worktree-teardown.sh <worktree>  run inside the worktree just before it is
+      removed: by land.sh after a landing, and by the plugin's worktree-remove.sh for a run that
+      ended with nothing on its branch.
+      It must be idempotent and must tolerate a half-built worktree (a setup that failed midway).
+  Everything setup writes into the worktree must be gitignored (an untracked file is a dirty worktree
+  to land.sh). Every per-worktree resource is named FROM THE WORKTREE PATH, so the teardown can find what the
+  setup made without any state of its own, and two worktrees never share one.
+
 THEN wire it up:
-1. .claude/workflow.md gains a row for it in the "Scripted mechanics" section (create the section if
+1. .claude/workflow.md gains a row for each script in the "Scripted mechanics" section (create the section if
    the /deliver bootstrap has not already), with its exit codes, plus a pointer line under whatever
    section lists what the generic skills read.
 2. The worktree-sync allow-list carries .claude/scripts/ if it does not already.
@@ -79,6 +98,8 @@ THEN wire it up:
    landing step both read "dirty worktree", so an untracked script would block on itself.
 
 FINALLY prove it works, and show me the output — do not just tell me it is written:
+- if you wrote the worktree pair: setup on a throwaway worktree leaves it gateable, teardown removes
+  every resource setup made, and teardown run twice exits 0;
 - a dirty main checkout -> 13;
 - the plan template's placeholder Handoff -> 20, and a real `Auto: **dispatch**` -> passes;
 - an unlanded branch touching a path the plan names -> 12, and one touching nothing it names -> 0
