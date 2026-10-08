@@ -153,7 +153,7 @@ block a green land. Last line on success: `LANDED <hash> <subject>`.
 | 24 | empty squash | report; nothing to land |
 | 10 | the script already waited `--lock-wait` minutes and the lock did not clear | report it: a landing held that long is stuck, not busy. Do not re-run on a loop, and never remove a lock by hand while its process is alive |
 
-**Do not deploy.** That word belongs to the operator.
+**Do not deploy on your own.** That word belongs to the operator — §8 asks for it.
 
 ## 6. When it does not land
 
@@ -177,3 +177,28 @@ lists every unlanded branch and **blocks only when one overlaps the next plan's 
 What is worth doing after a green land is confirming what the landing removes — the worktree is gone
 from `git worktree list` and the branch from `git branch` (§5, exit 0). A branch that survives its own
 landing is the backlog this skill exists to prevent.
+
+## 8. Ask "Deploy?" — the last thing you do
+
+A landing that ends in a report leaves the chat idle with nothing flagging it. End every green run
+with one `AskUserQuestion` instead — it notifies the operator, and their answer is the deploy word.
+
+Ask it once, after the last landing of this run (a no-argument `/land` lands several), when:
+
+- at least one landing exited 0, and
+- the declaration lists deploy commands, and
+- the session is interactive — a `/land` running inside a background `/dispatch` subagent has no
+  operator to answer; it ends with its report.
+
+The question carries the report so the notification reads on its own:
+
+- question: `Landed <hash> <subject>. Deploy?` — one line per landing when there were several, plus
+  any operator-queue items this sweep filed that must happen before a deploy (a production
+  migration, a backfill), named in a few words each;
+- header: `Deploy`;
+- options: **Yes** — run the declaration's deploy commands in order from the main checkout and
+  report each one's outcome; **Not now** — stop.
+
+When the question names items owed before deploy, word it `… Deploy? Owed first: <items>` — a Yes
+then means the operator has done them. A deploy command that fails gets its full
+output in the report; do not retry it or roll anything back on your own.

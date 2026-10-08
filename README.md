@@ -101,7 +101,8 @@ It names, in whatever headings suit you:
   needs more (its own database per worktree) adds `.claude/scripts/dispatch/worktree-setup.sh` and
   `worktree-teardown.sh` (step 3).
 - **Branch namespace** (default `wt`).
-- **Deploy commands** — listed so `/deliver` and `/land` know never to run them.
+- **Deploy commands** — `/deliver` never runs them; `/land` runs them only when the operator answers
+  Yes to its closing "Deploy?" question.
 - **Protected files** — secret/env files a run must stop before touching.
 - **Model policy** — implementation model and effort, the escalation after repeated red gates, and the
   review effort for sensitive areas.
