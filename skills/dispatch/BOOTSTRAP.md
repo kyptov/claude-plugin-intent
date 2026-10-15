@@ -24,7 +24,10 @@ and ask me for those facts, write the file, then continue.
 
 Write one script:
 
-  .claude/scripts/dispatch/preflight.sh <plan-path> [--self <session-id>]
+  .claude/scripts/dispatch/preflight.sh <plan-path> [--self <session-id>] [--waitfor <path>]
+
+`--waitfor` is the plugin's skills/dispatch/wait-for.sh; /dispatch always passes it. Read that
+script's header before writing this one: it is the wait-for half of this contract.
 
 CONTRACT — the exit code is the interface; the skill routes on it, so these numbers are fixed.
 
@@ -59,6 +62,27 @@ CONTRACT — the exit code is the interface; the skill routes on it, so these nu
 Check them in that order, cheapest first, and print one PASS/BLOCKED line per check so the pane
 reads as a checklist.
 
+WAIT VERDICT — 10, 11, 12 and 13 are blocks another SESSION can hold, and two cockpits blocking each
+other (one holds the lease or dirty paths, the other's unlanded branch overlaps the first's plan)
+deadlock if each asks the operator to wait for the other. So on each of those four blocks, before
+exiting, call the helper and print its stdout verbatim:
+
+  "$waitfor" check --self "$self" --resource <r> --lock <land lock dir> --trunk <trunk> \
+                   [--lease <lease file> --lease-idle <minutes>]
+      <r>:  10 → land-lock · 11 → lease · 12 → "branch <first overlapping branch>" · 13 → dirty-checkout
+      --lease/--lease-idle: only if this project has a main-checkout lease file (the declaration or
+      its guard hook names it); 13 needs it too — the lease holder is who the dirty paths belong to.
+
+Its first line is `VERDICT CLEAR|WAIT|YIELD|FIX …`; the skill routes on that word. Then:
+  - CLEAR on a block means the block is already gone (the helper removed a dead session's lease, or
+    the holder released between your check and its): carry on to the next check, do not exit.
+  - anything else: exit with the block's own code, unchanged. The verdict travels in the output, so
+    no new exit code is needed.
+On exit 0, run `"$waitfor" clear --self "$self"` (drops a wait record left by an earlier blocked try)
+and print `VERDICT CLEAR`. Exit 20 and the usage codes print no verdict: no session holds them.
+With no `--waitfor` (or a missing file), print no VERDICT line at all — the skill reads a block
+without one as "this preflight cannot check for wait cycles" and stops.
+
 RULES:
 - macOS /bin/bash 3.2: no arrays under `set -u`, no mapfile. Use `set -uo pipefail`.
   Nested inside `$( … )`, a case pattern needs a leading `(` — `case $x in (a|b) … ;; esac` — or
@@ -69,7 +93,9 @@ RULES:
   capture its output and decide from the text.
 - Every non-obvious line gets a comment saying WHY, in the declaration's own terms. This script is
   read cold by an agent that has never seen it.
-- Read-only: it inspects, it never writes, locks, commits or launches anything.
+- Read-only, apart from what the helper does: it inspects, it never writes, locks, commits or
+  launches anything itself. The helper writes the session's wait record under .claude/waits/ and, on
+  YIELD, deletes that session's own lease — that is the release the verdict reports.
 
 ALSO, only if this project's worktrees need more than a dependency install and a `worktree:sync`
 package script to be gateable — a database of their own, a port, a generated env file — write the
@@ -105,5 +131,12 @@ FINALLY prove it works, and show me the output — do not just tell me it is wri
 - an unlanded branch touching a path the plan names -> 12, and one touching nothing it names -> 0
   with the branch reported. Build that fixture branch with plumbing — `git commit-tree` against a
   temp `GIT_INDEX_FILE` — so the working tree is never touched.
-Delete every fixture and branch you made.
+- the crossed blocks, with two fixture sessions: start two `sleep 600` processes and write a
+  registry file for each into a temp dir, `{"pid":…,"sessionId":"older"|"younger","startedAt":
+  1000|2000,"procStart":"<TZ=UTC ps -o lstart= -p pid, trimmed>"}`, then run with
+  WAITFOR_SESSIONS_DIR=<that dir>. Give "younger" a fresh lease and "older" the overlapping fixture
+  branch (`git config branch.<b>.workflowSession older`). `--self older` -> 11 + VERDICT WAIT;
+  `--self younger` -> 12 + VERDICT YIELD, and the lease file is gone; `--self older` again -> past
+  the lease check (VERDICT CLEAR on it).
+Delete every fixture, branch, record (.claude/waits/) and process you made.
 ```

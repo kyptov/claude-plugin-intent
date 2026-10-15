@@ -51,7 +51,7 @@ Never dispatch into a dirty situation. The declaration's **Scripted mechanics** 
 project's dispatch preflight; run it per plan and route on its exit code:
 
 ```sh
-.claude/scripts/dispatch/preflight.sh <plan-path>
+.claude/scripts/dispatch/preflight.sh <plan-path> --waitfor "${CLAUDE_PLUGIN_ROOT}/skills/dispatch/wait-for.sh"
 ```
 
 | | |
@@ -72,10 +72,35 @@ in a script, never re-derived from prose.
 Two of those codes carry judgement worth knowing:
 
 - **`11` blocks ad-hoc SOURCE edits in the main checkout, not dispatching.** The project's guard hook
-  denies the write anyway, so ignoring it only burns a run. A lease idle past 45 minutes is stale and
-  takeable; clear a known-dead one with `rm .claude/main-checkout.lock`.
+  denies the write anyway, so ignoring it only burns a run. Staleness (idle past the declaration's
+  threshold) and a holder that is no longer a live session are both settled by the scripts, never
+  by eye.
 - **`12` is a file-set intersection, not a feeling.** The script intersects the paths the plan names
   with each unlanded branch's diff. A non-overlapping unlanded branch is reported and does **not** block — but `/land` it the same day.
+
+### 1a. Blocked by another session — route on the `VERDICT` line
+
+Exits 10–13 are blocks another session can hold: a landing in flight, its lease, its unlanded
+branch, its uncommitted paths. Two cockpits can each hold what the other waits for, and the operator
+— the only one either would ask — cannot see that cycle. So the preflight prints a verdict from the
+plugin's `wait-for.sh`, which records who waits on whom (`.claude/waits/`) and breaks a cycle by
+making one session yield. **Never ask the operator to make this session wait on another session;
+the script decides.**
+
+| Verdict | What you do |
+|---|---|
+| `CLEAR` | nothing another session holds is in the way; with exit 0, dispatch |
+| `WAIT` | run the `WAIT-CMD` line verbatim with `Bash` `run_in_background: true`, `timeout: 7200000`, and end your turn. Its completion is the wake-up: it ends `CLEAR` → re-run the preflight; `YIELD` → as below; `TIMEOUT` → report the holder and the wait, plainly, and stop |
+| `YIELD` | this plan does not start. Report `yielded to <session> to break a wait cycle` and what the script released (your lease) or listed (uncommitted paths for the operator to commit or stash), in one line. Do not re-dispatch it this turn |
+| `FIX` | no live session holds the block, so waiting cannot clear it: `12` → the branch's cockpit is gone, so §5's seams table (*cockpit ended first*) applies; `13` → report the paths for the operator to commit or stash; anything else → report the block |
+
+A block with **no `VERDICT` line** means the project's preflight predates this contract: stop, say
+so, and point at `${CLAUDE_PLUGIN_ROOT}/skills/dispatch/BOOTSTRAP.md` to regenerate it.
+
+None of these is a question. A report that a plan yielded, or that its paths need committing, is a
+statement; the operator acts on it when they choose.
+
+### 1b. The branch name
 
 Then one check of your own, per plan: the run will name its branch `<prefix>/<slug>` (the
 declaration's branch namespace, default `wt`; the slug is the plan's file name without `.md` and
@@ -165,7 +190,8 @@ words, not in tool output:
 - anything waiting on their call, and any branch that failed to land.
 
 `git worktree list` and `git branch --list '<prefix>/*' --no-merged <trunk>` show what the repo
-holds beyond your own runs.
+holds beyond your own runs; `"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/wait-for.sh list` shows which
+sessions are waiting on which.
 
 Only send a `PushNotification` for something that changes what they would do next: a run needs a
 decision, or a branch would not land. Not for progress.

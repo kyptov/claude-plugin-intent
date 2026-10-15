@@ -5,6 +5,12 @@
 #   make-project.sh main       the workspace is the MAIN checkout, on `main` (cockpit cases)
 #   make-project.sh worktree   the workspace is the run's WORKTREE on wt/duration-format (deliver)
 #   make-project.sh delivered  main checkout, plus the finished run at ../demo-wt-duration-format (land)
+#   make-project.sh wait-cycle main checkout shared by two cockpits with crossed blocks (the
+#                              dispatch wait-cycle cases). cockpit-a (older) owns the unlanded
+#                              wt/time-canon, which overlaps duration-format, and is waiting on
+#                              cockpit-b's lease to dispatch its own plan, csv-durations.
+#                              cockpit-b (younger) holds the main-checkout lease and is waiting on
+#                              wt/time-canon to dispatch duration-format. Both wait records are on disk.
 #
 # Called from a case's own scaffold script with the workspace as cwd. The mechanics scripts are
 # stubs: runs have no Bash, so they only need to exist — every case's prompt supplies their output.
@@ -103,7 +109,7 @@ Project inputs for the generic workflow skills (`intent` → `dispatch` → `del
 | `deliver/gate.sh --slice <id>` / `--full` | the gates from touched paths; per-slice failure counting | `0` green · `30` first red · `31` second → escalate · `32` third → stop |
 | `deliver/report.sh <plan>` | `## Decisions (agent-made)` + `## Not delivered` present and tagged; prints the cockpit line | `0` · `40` untagged · `41` missing section |
 | `intent/plan-check.sh <plan>` | sections vs template, placeholders, slice `- Files:` + `[verify]`, canon anchors, `## Out of scope` marks, slug collision; `--set-handoff <v>` | `0` · `20` Handoff · `40` section · `41` placeholder · `42` slice · `43` verify · `44` anchor · `45` scope mark · `46` slug taken |
-| `dispatch/preflight.sh <plan>` | `land.lock`, clean main checkout, `## Handoff`, overlap with unlanded `wt/*` | `0` · `10` land.lock · `12` overlap · `13` dirty · `20` Handoff |
+| `dispatch/preflight.sh <plan> --waitfor <wait-for.sh>` | `land.lock`, clean main checkout, `## Handoff`, overlap with unlanded `wt/*`; a `VERDICT` line from the plugin's `wait-for.sh` on any block another session holds | `0` · `10` land.lock · `11` lease · `12` overlap · `13` dirty · `20` Handoff |
 
 All under `.claude/scripts/`.
 
@@ -287,7 +293,42 @@ Tag every entry `[agent]` or `[operator]`.
 <!-- /deliver appends here at the end. -->
 EOF
 
+if [ "$mode" = wait-cycle ]; then
+  # cockpit-a's plan: touches nothing wt/time-canon does, so only b's lease stands in its way.
+  sed -e 's/^# Run durations read as hours and minutes$/# The CSV export prints durations as hours and minutes/' \
+      -e 's#`src/duration.ts`, `src/duration.test.ts`, `src/run-card.ts`#`src/export.ts`, `src/export.test.ts`#' \
+      -e 's#wt/duration-format#wt/csv-durations#' \
+      docs/plans/duration-format.md > docs/plans/csv-durations.md
+  printf 'export function csvRow(name: string, seconds: number): string {\n  return `${name},${seconds}`;\n}\n' > src/export.ts
+  cat >> .claude/workflow.md <<'EOF'
+
+## Main-checkout lease
+
+`.claude/main-checkout.lock` — `<session-id> <epoch>`, written by the project's guard hook on every
+source write in the main checkout; stale after 45 minutes idle. `dispatch/preflight.sh` also exits
+`11` while another session holds it fresh.
+EOF
+fi
+
 git add -A && git commit -qm "demo: baseline with the duration-format plan"
+
+# `wait-cycle`: the two sessions' state on disk, matching what the case prompts' script output reports.
+if [ "$mode" = wait-cycle ]; then
+  older=4be1c0de-0000-4000-8000-00000000000a
+  younger=9f3c0de0-0000-4000-8000-00000000000b
+  printf '.claude/main-checkout.lock\n.claude/waits/\n' >> .git/info/exclude
+  git checkout -q -b wt/time-canon
+  printf '// Display formatting for durations. Canon: docs/time.md §1.\nexport function formatSeconds(seconds: number): string {\n  return `${Math.max(0, Math.floor(seconds))}s`;\n}\n' > src/duration.ts
+  git commit -qam "fix(display): clamp negative durations"
+  git checkout -q main
+  git config branch.wt/time-canon.workflowSession "$older"
+  printf '%s %s\n' "$younger" "$(date +%s)" > .claude/main-checkout.lock
+  mkdir -p .claude/waits
+  printf 'holder=%s\nresource=lease\nstarted=1792060000000\npid=4101\nsince=%s\nupdated=%s\n' \
+    "$younger" "$(date -u +%FT%TZ)" "$(date +%s)" > ".claude/waits/$older"
+  printf 'holder=%s\nresource=branch wt/time-canon\nstarted=1792063600000\npid=4202\nsince=%s\nupdated=%s\n' \
+    "$older" "$(date -u +%FT%TZ)" "$(date +%s)" > ".claude/waits/$younger"
+fi
 
 if [ "$mode" = worktree ]; then
   rmdir "$ws" 2>/dev/null || true

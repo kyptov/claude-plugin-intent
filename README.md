@@ -140,10 +140,16 @@ works on throwaway fixtures before it finishes.
 | Prompt | Builds | Without it |
 |---|---|---|
 | `skills/deliver/BOOTSTRAP.md` | `.claude/scripts/deliver/{preflight,gate,report}.sh` and a shared `lib.sh` | `/deliver` stops before the first edit |
-| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches; and, when worktrees need it, `worktree-{setup,teardown}.sh` | `/dispatch` stops (without the pair: install + `worktree:sync` only) |
+| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches, and on a block held by another session a `VERDICT` line from the plugin's `skills/dispatch/wait-for.sh`; and, when worktrees need it, `worktree-{setup,teardown}.sh` | `/dispatch` stops (without the pair: install + `worktree:sync` only) |
 | `skills/intent/BOOTSTRAP.md` | `.claude/scripts/intent/plan-check.sh` — the one machine check on a plan before it is approved | `/intent` checks the plan by hand and says the script is missing |
 
 The three are independent; paste them in any order, or all in one session.
+
+`skills/dispatch/wait-for.sh` is the plugin's own, not a project script: when a cockpit is blocked by
+another session (its landing, lease, unlanded branch or uncommitted paths), it records the wait in
+`.claude/waits/<session-id>`, walks the other sessions' records for a cycle back to this one, and
+answers `CLEAR`, `WAIT`, `YIELD` or `FIX`. In a cycle the youngest session that can release what the
+other waits on — a lease, or uncommitted paths — yields; nobody asks the operator who should wait.
 
 ### 4. Try it
 
@@ -167,6 +173,8 @@ claude plugin eval . --scaffold --trust-plugin --no-publish -j 4 --threshold 0.8
 | `deliver-decides-alone` | `/deliver` asking the operator at a fork instead of deciding and logging it |
 | `land-on-green-verdict` | `Handoff: both` plus a green `DELIVERED`, and nobody invokes `/land` |
 | `land-holds-on-red` | the guard for the case above: a `gates: RED` verdict must not land |
+| `dispatch-yields-in-wait-cycle` | two cockpits with crossed blocks (one's lease, the other's overlapping branch): the session the verdict names `YIELD` asks the operator whether to wait, or dispatches anyway, instead of reporting the yield |
+| `dispatch-waits-out-wait-cycle` | the other side of that crossing: the session told `WAIT` asks the operator, or polls, instead of running the wait detached and dispatching once it ends `CLEAR` |
 | `land-files-debt-to-intake` | a `/land` that writes a plan's debt leftovers into the pool file when the declaration names an intake directory — the edit two parallel landings conflict on |
 
 Every case is a **dry run**: Bash, Write, Edit and Agent are withheld, so no worktree, run or push

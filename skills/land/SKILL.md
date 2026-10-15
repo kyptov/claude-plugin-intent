@@ -152,6 +152,29 @@ block a green land. Last line on success: `LANDED <hash> <subject>`.
 | 23 | fast-forward refused three times | §6 — `main` is moving faster than the gates; try once more, then §6 |
 | 24 | empty squash | report; nothing to land |
 | 10 | the script already waited `--lock-wait` minutes and the lock did not clear | report it: a landing held that long is stuck, not busy. Do not re-run on a loop, and never remove a lock by hand while its process is alive |
+| 26 | uncommitted paths in the main checkout refused the fast-forward; the branch is rebased, green, and kept | §5a, resource `dirty-checkout` |
+
+### 5a. Blocked by another session
+
+A landing needs exactly two things from the rest of the repo: the land lock, which `land.sh` queues
+for on its own, and a main checkout whose uncommitted paths do not stand in the fast-forward's way
+(exit 26). **The main-checkout lease is not one of them** — `land.sh` neither takes nor needs it, so
+another session's lease never blocks a landing; do not wait on it.
+
+When exit 26 says another session's paths are in the way, ask the plugin's wait-for helper, which
+records the wait and checks whether that session is in turn waiting on this one:
+
+```sh
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/wait-for.sh check --resource dirty-checkout \
+  [--lease "<the declaration's main-checkout lease file, if it names one>"]
+```
+
+**Never ask the operator to make this landing wait on another session; the script decides.** Route
+on its `VERDICT` line exactly as `/dispatch` §1a does: `WAIT` → run its `WAIT-CMD` detached and end
+the turn, re-running `land.sh` when it ends `CLEAR`; `YIELD` → report `yielded to <session> to break
+a wait cycle` with the paths it lists, and leave the branch for the next `/land`; `FIX` → the paths
+are this session's own or nobody's: report them for the operator to commit or stash. None of these
+is a question, and none touches the branch: it stays rebased and green.
 
 **Do not deploy on your own.** That word belongs to the operator — §8 asks for it.
 

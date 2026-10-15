@@ -18,13 +18,15 @@
 #   0 landed   20 rebase conflict (branch + worktree left as they are)   21 gates red after rebase
 #   22 push refused   23 fast-forward refused 3× (trunk kept moving)   24 empty squash (nothing to land)
 #   25 local <trunk> and origin/<trunk> diverged — needs a human, retrying cannot fix it
+#   26 uncommitted paths in the main checkout refused the fast-forward (branch rebased + green, kept)
 #   10 a LIVE landing still held the lock after --lock-wait minutes   1x argument / repo errors
 #
 # THE LOCK WAITS INSTEAD OF BOUNCING. Two landings that overlap are the normal case in a wave, not
 # an error — the second one belongs in a queue, not back in the model's lap, because every bounce
 # costs a cockpit turn and the operator's attention. So:
 #   - the lock is a DIRECTORY, taken with `mkdir` (atomic; macOS has no flock(1)).
-#   - it records pid + that process's start time + branch + the cockpit that owns it. Liveness is
+#   - it records pid + that process's start time + branch + the cockpit that owns it (name and
+#     session id). Liveness is
 #     `kill -0 <pid>` AND the same start time, because a PID alone is reused.
 #   - a holder that is alive → poll until it releases, up to --lock-wait minutes (default 25: above
 #     a healthy worst case of attempts × gates, below "wedged"; a project whose suite is slow says
@@ -85,14 +87,15 @@ held_lock=0
 release() { [ "$held_lock" = 1 ] && rm -rf "$lock"; }
 trap release EXIT
 
-# The cockpit this landing belongs to, for the waiter's message only — never for liveness. Walk up
-# to the `claude` ancestor and read the name Claude Code's session registry records for that pid.
-# Best-effort: an unnamed or unresolvable session is not an error.
-owner_session() {
+# The cockpit this landing belongs to: its registry `name` for the waiter's message, and its
+# `sessionId` so skills/dispatch/wait-for.sh can name the holder of a wait on this lock — never for
+# liveness, which is pid + start time below. Walk up to the `claude` ancestor and read that pid's
+# entry in Claude Code's session registry. Best-effort: an unresolvable session is not an error.
+owner_session() {   # <jq field>
   p=$$ ; n=0
   while [ "$n" -lt 8 ] && [ "${p:-1}" -gt 1 ]; do
     f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$p.json"
-    if [ -f "$f" ]; then jq -r '.name // empty' "$f" 2>/dev/null; return; fi
+    if [ -f "$f" ]; then jq -r ".$1 // empty" "$f" 2>/dev/null; return; fi
     p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ') ; n=$((n + 1))
   done
 }
@@ -104,7 +107,7 @@ lock_started=$(date +%s); last_report=""; ownerless_since=""
 while :; do
   if mkdir "$lock" 2>/dev/null; then
     { echo "pid=$$"; echo "started=$(pid_started $$)"; echo "branch=$branch"
-      echo "session=$(owner_session)"; echo "since=$(date -u +%FT%TZ)"; } > "$lock/owner"
+      echo "session=$(owner_session name)"; echo "session_id=$(owner_session sessionId)"; echo "since=$(date -u +%FT%TZ)"; } > "$lock/owner"
     held_lock=1
     break
   fi
@@ -191,6 +194,15 @@ while [ "$i" -lt "$attempts" ]; do
   echo "==> fast-forward $trunk in the main checkout"
   git -C "$repo" checkout -q "$trunk" 2>/dev/null
   if git -C "$repo" merge -q --ff-only "$branch"; then break; fi
+  # The trunk still an ancestor of the branch means a fast-forward WAS possible: what refused it is
+  # the main checkout's own uncommitted paths in the way. Retrying cannot fix that, and calling it
+  # "trunk moved" would send the model chasing the wrong cause — exit 26 so /land can ask
+  # wait-for.sh whose paths they are.
+  if git -C "$repo" merge-base --is-ancestor "$trunk" "$branch" && [ -n "$(git -C "$repo" status --porcelain)" ]; then
+    echo "fast-forward refused by uncommitted paths in the main checkout — branch rebased and green, left as it is:" >&2
+    git -C "$repo" status --porcelain | sed 's/^/  /' >&2
+    exit 26
+  fi
   echo "fast-forward refused — $trunk moved during the gates; retrying" >&2
   [ "$i" -lt "$attempts" ] || exit 23
 done

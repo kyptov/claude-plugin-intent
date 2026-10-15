@@ -14,6 +14,8 @@
 #             when the project has one. Otherwise the install is inferred from the lockfile
 #             (pnpm/yarn/npm/bun) and a `worktree:sync` package script is run if the repo declares one.
 #   setup output must be gitignored: anything it leaves untracked reads as a dirty worktree to land.sh.
+#   holder    `git config branch.<branch>.workflowSession <session_id>` — the dispatching session,
+#             read by wait-for.sh when this branch blocks another cockpit's dispatch.
 #   failure   a setup that fails tears down what it built (the project's worktree-teardown.sh, then
 #             the worktree and branch) and exits non-zero, so the agent never starts in a half-built
 #             tree and nothing is left behind that no session knows about.
@@ -34,6 +36,9 @@ exec 3>&1 1>&2
 in=$(cat)
 name=$(printf '%s' "$in" | jq -r '.name // empty' 2>/dev/null)
 cwd=$(printf '%s' "$in" | jq -r '.cwd // empty' 2>/dev/null)
+# The session that ran the Agent call — the cockpit that will land this branch. A subagent's hook
+# payload carries its parent's session_id.
+sid=$(printf '%s' "$in" | jq -r '.session_id // empty' 2>/dev/null)
 [ -n "$name" ] || { echo "WorktreeCreate: no name on stdin"; exit 64; }
 case "$name" in
   (.*|*[!A-Za-z0-9._-]*) echo "WorktreeCreate: refusing worktree name '$name'"; exit 64 ;;
@@ -69,6 +74,10 @@ fi
 
 echo "==> worktree $wt on $branch from $trunk"
 git -C "$repo" worktree add -q "$wt" -b "$branch" "$trunk" || exit 68
+# Who holds this branch until it lands. Another cockpit whose dispatch it blocks (preflight exit 12)
+# waits on THIS session, and wait-for.sh needs the id to check for a wait cycle. Branch config, not a
+# file: `git branch -m` carries it to <prefix>/<slug> when /deliver renames, and `branch -d` drops it.
+[ -z "$sid" ] || git -C "$repo" config "branch.$branch.workflowSession" "$sid"
 
 setup="$repo/.claude/scripts/dispatch/worktree-setup.sh"
 teardown="$repo/.claude/scripts/dispatch/worktree-teardown.sh"
