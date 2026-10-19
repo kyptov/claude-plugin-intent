@@ -2,6 +2,7 @@
 name: dispatch
 description: Cockpit dispatcher — take an approved plan contract and start its unattended /deliver run as a background subagent in a worktree of its own; also reports the status of running work and unlanded branches. Use after /intent is approved, or when the operator asks to start, queue, check, or parallelise implementation work. Not for interviewing (/intent), implementing (/deliver), or merging (/land).
 argument-hint: plan path(s)
+model: sonnet
 ---
 
 # Dispatch a plan into its worktree
@@ -18,6 +19,12 @@ then continue — never guess gates, because a wrong gate makes every downstream
 You are the cockpit: a long-lived `--remote-control` session on a machine that stays on, reachable from any
 device. **You never implement a feature yourself** — that keeps your context plan-sized, your cost
 low, and your replies fast on a phone. You interview, dispatch, report, and land.
+
+**This skill runs on Sonnet** (`model: sonnet` above): dispatching, waiting and reporting are
+babysitting, not thinking. The override covers the turn the skill runs in; a completion
+notification wakes the session on its own model, and §5's `/land` switches back to Sonnet. A project
+that wants every cockpit turn on Sonnet runs a separate `claude --model sonnet` cockpit for
+dispatch and land, and interviews (`/intent`) in an Opus session that hands it the plan.
 
 **The cockpit runs in `bypassPermissions` mode.** A run is a subagent of this session and inherits its
 permission mode, so in any other mode the run's first permission prompt surfaces here and parks the
@@ -90,12 +97,12 @@ the script decides.**
 | Verdict | What you do |
 |---|---|
 | `CLEAR` | nothing another session holds is in the way; with exit 0, dispatch |
-| `WAIT` | run the `WAIT-CMD` line verbatim with `Bash` `run_in_background: true`, `timeout: 7200000`, and end your turn. Its completion is the wake-up: it ends `CLEAR` → re-run the preflight; `YIELD` → as below; `TIMEOUT` → report the holder and the wait, plainly, and stop |
-| `YIELD` | this plan does not start. Report `yielded to <session> to break a wait cycle` and what the script released (your lease) or listed (uncommitted paths for the operator to commit or stash), in one line. Do not re-dispatch it this turn |
-| `FIX` | no live session holds the block, so waiting cannot clear it: `12` → the branch's cockpit is gone, so §5's seams table (*cockpit ended first*) applies; `13` → report the paths for the operator to commit or stash; anything else → report the block |
+| `WAIT` | run the `WAIT-CMD` line verbatim with `Bash` `run_in_background: true`, `timeout: 7200000`, and end your turn. Its completion is the wake-up: it ends `CLEAR` → re-run the preflight; `YIELD` → as below; `TIMEOUT` → report the holder and the wait, plainly, notify (§4), and stop |
+| `YIELD` | this plan does not start. Report `yielded to <session> to break a wait cycle` and what the script released (your lease) or listed (uncommitted paths for the operator to commit or stash), in one line, and notify (§4). Do not re-dispatch it this turn |
+| `FIX` | no live session holds the block, so waiting cannot clear it: `12` → the branch's cockpit is gone, so §5's seams table (*cockpit ended first*) applies; `13` → report the paths for the operator to commit or stash; anything else → report the block. Notify (§4) |
 
 A block with **no `VERDICT` line** means the project's preflight predates this contract: stop, say
-so, and point at `${CLAUDE_PLUGIN_ROOT}/skills/dispatch/BOOTSTRAP.md` to regenerate it.
+so, notify (§4), and point at `${CLAUDE_PLUGIN_ROOT}/skills/dispatch/BOOTSTRAP.md` to regenerate it.
 
 None of these is a question. A report that a plan yielded, or that its paths need committing, is a
 statement; the operator acts on it when they choose.
@@ -110,6 +117,30 @@ without a trailing `-plan`). If that branch already exists, an earlier run of th
 ```sh
 git show-ref --verify --quiet refs/heads/<prefix>/<slug> && echo "taken"
 ```
+
+A plan whose header carries **`after: <slug>`** is the second half of a split (`/intent` §3's plan
+budget): it starts only once `<slug>` has landed — its plan file is gone from the trunk, because
+`/land` deletes it. Until then it does not start: report `<slug> waits for <after-slug> to land`, and
+dispatch it from §5 in the turn that lands `<after-slug>`.
+
+### 1c. A run slot — at most `max_parallel_runs` runs at once
+
+The account's session limit is shared by every cockpit and every run; past it, all of them freeze.
+So the last check before a launch, per plan, after the preflight is clear, is a run slot — the
+declaration's `max_parallel_runs`, default 5:
+
+```sh
+"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/wait-for.sh check --resource run-slot --max-runs <max_parallel_runs> \
+  [--prefix <branch namespace>]
+```
+
+It counts the live runs of every cockpit in this repo (a worktree on `<prefix>/*` whose cockpit is
+alive and whose run has written no verdict yet) and the cockpits queued ahead of this one. `CLEAR`
+claims the slot: launch (§3). `WAIT` carries `position=` and `running=`: this plan does not launch.
+Print `<slug>: queued — position <n>, <running> running`, notify (§4), run its `WAIT-CMD` exactly as
+§1a's `WAIT` row says, and end your turn; on `CLEAR`, re-run the preflight and launch; on `TIMEOUT`,
+report and notify. A wave claims one slot per plan: check each in turn, launch the ones that got
+`CLEAR`, queue the rest behind one wait.
 
 ## 2. Read `## Handoff` from the plan — it is already decided
 
@@ -168,8 +199,12 @@ family alias (`opus`, `sonnet`, …) and resolves to its latest model. The run's
 
 Dispatch 2-4 runs **in one wave** — several `Agent` calls in one message — not trickled. Parallelism
 is decided here, by which plans go in a wave; a run implements its own slices in order. **There is no
-deferred path** — every dispatch starts now. "Tonight" is not an option to offer; if the operator
-wants work to start later, they say so and nothing in this skill runs.
+deferred path** — every dispatch starts now, or queues for a run slot (§1c), or waits on another
+session (§1a); nothing else delays it. "Tonight" is not an option to offer; if the operator wants
+work to start later, they say so and nothing in this skill runs.
+
+Once the `Agent` calls have returned, release the slot claims — each run's worktree now counts
+itself: `"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/wait-for.sh clear`.
 
 Report the wave in one line per run — the plan, and that it started — then end your turn.
 
@@ -193,8 +228,22 @@ words, not in tool output:
 holds beyond your own runs; `"${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/wait-for.sh list` shows which
 sessions are waiting on which.
 
-Only send a `PushNotification` for something that changes what they would do next: a run needs a
-decision, or a branch would not land. Not for progress.
+### Notify at every terminal event — and only then
+
+The operator should never have to ask "status?". Send one `PushNotification` and print the same
+line in the reply at each of these, one line each:
+
+| Event | Line |
+|---|---|
+| a run's final report arrives green, `Handoff` is not `both` | `<slug>: green — ready to /land` |
+| a run's final report arrives `RED` or `not-run`, or with no verdict | `<slug>: RED — <failing gate or stop reason> — needs you` |
+| `/land` finishes | `/land` §5b sends it: `<slug>: landed <short hash>` or `<slug>: not landed — exit <code> — <what it needs>` |
+| a wait ends `TIMEOUT` | `<slug>: wait timed out — <resource> held by <holder> — needs you` |
+| a block this cockpit cannot clear (`YIELD`, `FIX`, no `VERDICT`, preflight `20`) | `<slug>: BLOCKED — <reason> — needs you` |
+| a plan queued for a run slot (§1c) | `<slug>: queued — position <n>, <running> running` |
+
+A green report with `Handoff: both` gets no line of its own: the landing follows in the same turn
+and `/land`'s line says how it ended. Never on a slice, a wave start, or a wait that is still going.
 
 ## 5. Then land
 

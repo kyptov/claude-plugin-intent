@@ -2,6 +2,7 @@
 name: land
 description: Merge a finished worktree branch into the trunk as exactly one commit — squash, rebase onto origin, re-run the gates, fast-forward, push, remove the worktree, delete the branch — retrying when another run lands first and never abandoning a branch silently. Invoked by /dispatch when the plan's Handoff is "both", or by the operator to land, merge, or clean up a worktree. Not for planning (/intent) or implementing (/deliver).
 argument-hint: worktree path or branch name; omit to land every finished worktree in turn
+model: sonnet
 ---
 
 # Land a worktree onto main
@@ -20,6 +21,10 @@ sit unmerged indefinitely, because nothing forces the merge and no session list 
 
 Invariants: `main` stays **linear**, gets **one commit per feature**, and **no branch is ever left
 behind quietly.**
+
+**This skill runs on Sonnet** (`model: sonnet` above): a landing is waiting, a script and an exit
+code. The one step that needs thinking — §6's conflict re-attempt — runs in a nested `Agent` at the
+declaration's escalation model.
 
 ---
 
@@ -116,6 +121,7 @@ ride inside the squash.
   --gates "<gate commands from .claude/workflow.md>" \
   --extra-gate "<each conditional gate from the declaration's table that the plan triggered>" \
   --teardown "<per-worktree teardown command from workflow.md, if it names one>" \
+  --refresh "<post-rebase refresh command from workflow.md, if it names one>" \
   --lock-wait "<minutes, only if the declaration names one>"
 ```
 
@@ -126,17 +132,23 @@ thing that can strand the lock (the script releases it on every other exit).
 `--gates` is required and is the declaration's full gate line; trunk defaults to `origin/HEAD`, 3
 attempts. Without `--teardown`, the project's `.claude/scripts/dispatch/worktree-teardown.sh` runs when
 it exists — the counterpart of the setup script the worktree hook ran, so pass `--teardown` only for a
-project that declares some other command. The
-script: takes `.claude/land.lock`, **waiting up to `--lock-wait` minutes (default 25) when another
-landing holds it** — two landings overlapping in a wave is the normal case, so the second one queues
-instead of bouncing back to you; it takes a lock over at once when its owning process is gone.
-Exit 10 means the wait ran out, which is a landing that is stuck rather than busy — report it,
-do not re-run on a loop. A project whose gates are slow says so in its declaration (a 15-minute suite
-needs about `--lock-wait 50`: three rebase attempts each re-run it). Then it squashes with
-`reset --soft <merge-base>` + one commit (exit 24 on an empty diff — the run delivered nothing,
-report that rather than landing a no-op); then up to 3 × { `git fetch`, `git rebase origin/<trunk>`,
-gates, `merge --ff-only` in the main checkout } — **re-running the gates after every rebase**,
-because `main` moved and the previous green described a tree that no longer exists; then pushes;
+project that declares some other command. Likewise without `--refresh`, the project's
+`.claude/scripts/dispatch/worktree-refresh.sh <worktree>` runs after every successful rebase and
+before the gates, when it exists — the worktree was provisioned for the base it was dispatched from,
+and only the project knows what a new base needs (re-migrate its database, re-run codegen,
+reinstall). The script: takes `.claude/land.lock`, **polling every 30 s for up to `--lock-wait`
+minutes (default `LAND_LOCK_WAIT_MINUTES`, else 30) while a live landing holds it** — the holder is
+a landing that finishes in 10–20 minutes, so the second one queues instead of bouncing back to you.
+It prints the holder's branch and pid once, then nothing until it acquires the lock or gives up; it
+takes a lock over at once when its owning process is gone. Waiting is not yours to manage: do not
+sleep, poll or re-run around it, and do not ask `wait-for.sh` about the lock — a landing waits on
+nothing, so the land lock never closes a wait cycle. A project whose gates are slow says so in its
+declaration (a 15-minute suite needs about `--lock-wait 50`: three rebase attempts each re-run it).
+Then it squashes with `reset --soft <merge-base>` + one commit (exit 24 on an empty diff — the run
+delivered nothing, report that rather than landing a no-op); then up to 3 × { `git fetch`,
+`git rebase origin/<trunk>`, refresh, gates, `merge --ff-only` in the main checkout } —
+**re-running the gates after every rebase**, because `main` moved and the previous green described a
+tree that no longer exists; then pushes;
 then **tears down first and removes the directory second** (the teardown derives its target — a
 database, a port — from the worktree's own path). Teardown failure warns and continues: it must never
 block a green land. Last line on success: `LANDED <hash> <subject>`.
@@ -147,11 +159,11 @@ block a green land. Last line on success: `LANDED <hash> <subject>`.
 |---|---|---|
 | 0 | landed and pushed | confirm with `git worktree list` that the worktree is gone, then report the hash and what landed in product terms |
 | 20 | rebase conflict; branch + worktree untouched | §6 |
-| 21 | gates red after rebase | §6 |
+| 21 | the post-rebase refresh failed, or the gates are red after rebase | §6 |
 | 22 | push refused | §6 (never `--force`) |
 | 23 | fast-forward refused three times | §6 — `main` is moving faster than the gates; try once more, then §6 |
 | 24 | empty squash | report; nothing to land |
-| 10 | the script already waited `--lock-wait` minutes and the lock did not clear | report it: a landing held that long is stuck, not busy. Do not re-run on a loop, and never remove a lock by hand while its process is alive |
+| 10 | the script queued on the land lock — 30 s polls, holder printed once — for `--lock-wait` minutes and it did not clear | report it: a landing held that long is stuck, not busy. Do not re-run on a loop, and never remove a lock by hand while its process is alive |
 | 26 | uncommitted paths in the main checkout refused the fast-forward; the branch is rebased, green, and kept | §5a, resource `dirty-checkout` |
 
 ### 5a. Blocked by another session
@@ -178,15 +190,28 @@ is a question, and none touches the branch: it stays rebased and green.
 
 **Do not deploy on your own.** That word belongs to the operator — §8 asks for it.
 
+### 5b. Tell the operator — one line per landing
+
+When `land.sh` has exited and you have settled §5/§6, send one `PushNotification` and print the same
+line in the reply — the operator should never have to ask whether something landed:
+
+- exit 0 → `<slug>: landed <short hash>`
+- anything else, after §6 → `<slug>: not landed — exit <code> — <what it needs, a few words>`
+
+One per landing, never for a step in between; a no-argument `/land` sends one per branch. §8's
+question still follows a green landing.
+
 ## 6. When it does not land
 
 On a rebase conflict, red gates after rebase, or a 3rd refused fast-forward:
 
-1. Re-attempt that step once at the declaration's escalation model/effort — conflicts are exactly the case where the cheap model
-   is a false economy, and this path is rare enough that the cost is noise.
+1. Re-attempt that step once at the declaration's escalation model/effort — a foreground `Agent`
+   with that `model` and `effort`, handed the worktree, the exit and its output. Conflicts are
+   exactly the case where the cheap model is a false economy, and this path is rare enough that the
+   cost is noise.
 2. If it still fails: **leave the branch and the worktree exactly as they are.** Release the lock.
    Write a one-paragraph reason to the branch-triage file the declaration names (branch, what
-   conflicts, what a human needs to decide) and send one `PushNotification` under 200 characters.
+   conflicts, what a human needs to decide); §5b's line is the notification.
 
 Never `git push --force`, never delete an unmerged branch, never leave a branch unmentioned. A branch
 that cannot land must be **loud**, because the alternative is a finished feature nobody knows exists.

@@ -26,3 +26,5 @@ Results of the commands you will need:
 - `.claude/scripts/intent/plan-check.sh` → exit 0 on whatever plan you give it.
 - `.claude/scripts/dispatch/preflight.sh <plan>` → exit 0, prints `clear · Handoff: both`
 - `git show-ref --verify --quiet refs/heads/wt/<slug>` → exit 1 (no such branch)
+- `wait-for.sh check --resource run-slot …` (the run-slot check) → exit 0, prints `VERDICT CLEAR — run slot free (1 of 5 running); claimed until wait-for.sh clear`
+- `wait-for.sh clear` → exit 0, no output

@@ -5,17 +5,23 @@
 #
 #   land.sh <worktree-path> --message-file <file> --gates "<the declaration's full gate line>"
 #           [--extra-gate "<cmd>"]... [--teardown "<cmd run inside the worktree before removal>"]
+#           [--refresh "<cmd run inside the worktree after each rebase>"]
 #           [--trunk <branch>] [--attempts 3] [--lock-wait <minutes>]
 #
 # Project-agnostic: gates and teardown come from the project's .claude/workflow.md via flags. Without
 # --teardown, the project's `.claude/scripts/dispatch/worktree-teardown.sh <worktree>` runs when it
 # exists — the same script the WorktreeRemove hook runs, so both ways a worktree ends tear down alike.
+# Without --refresh, the project's `.claude/scripts/dispatch/worktree-refresh.sh <worktree>` runs after
+# every successful rebase, before the gates, when it exists: the worktree was provisioned (database
+# migrated, codegen run, deps installed) for the base it was dispatched from, and the rebase may have
+# brought in migrations or a lockfile change that the gate line cannot know about.
 #
 # Sequence: land lock → squash (reset --soft to merge-base + one commit) → up to N × (fetch, rebase
-# onto the trunk TIP, gates, fast-forward the main checkout) → push → per-worktree teardown → remove
-# worktree + branch → release lock. Exit codes name the failure so the
+# onto the trunk TIP, refresh, gates, fast-forward the main checkout) → push → per-worktree teardown →
+# remove worktree + branch → release lock. Exit codes name the failure so the
 # skill can route it:
-#   0 landed   20 rebase conflict (branch + worktree left as they are)   21 gates red after rebase
+#   0 landed   20 rebase conflict (branch + worktree left as they are)
+#   21 refresh or gates red after rebase
 #   22 push refused   23 fast-forward refused 3× (trunk kept moving)   24 empty squash (nothing to land)
 #   25 local <trunk> and origin/<trunk> diverged — needs a human, retrying cannot fix it
 #   26 uncommitted paths in the main checkout refused the fast-forward (branch rebased + green, kept)
@@ -28,9 +34,12 @@
 #   - it records pid + that process's start time + branch + the cockpit that owns it (name and
 #     session id). Liveness is
 #     `kill -0 <pid>` AND the same start time, because a PID alone is reused.
-#   - a holder that is alive → poll until it releases, up to --lock-wait minutes (default 25: above
-#     a healthy worst case of attempts × gates, below "wedged"; a project whose suite is slow says
-#     so in its declaration — a 15-minute suite needs about 50).
+#   - a holder that is alive → poll every 30s until it releases, up to --lock-wait minutes (default
+#     $LAND_LOCK_WAIT_MINUTES, else 30: a healthy landing holds it 10–20 minutes; a project whose
+#     suite is slow says so in its declaration — a 15-minute suite needs about 50). It prints the
+#     holder once, then only on acquiring the lock or giving up: the wait is a queue, not progress.
+#   - no wait-cycle check here: a landing holds the lock and waits on nothing, so a land-lock edge
+#     never closes a cycle (skills/dispatch/wait-for.sh, the authority on cycles, says the same).
 #   - a holder that is GONE → take the lock over at once, whatever its age. Only SIGKILL (a crash, a
 #     hard-killed tool call) can leave one behind: the EXIT trap releases on TERM, INT and HUP.
 #   - a lock with no owner record for 15s → junk (its process died between mkdir and writing the
@@ -51,13 +60,15 @@
 # Written for macOS /bin/bash 3.2: no arrays under `set -u`, no mapfile.
 set -uo pipefail
 
-wt=""; msgfile=""; gates=""; extra=""; teardown=""; trunk=""; attempts=3; lock_wait=25
+wt=""; msgfile=""; gates=""; extra=""; teardown=""; refresh=""; trunk=""; attempts=3
+lock_wait=${LAND_LOCK_WAIT_MINUTES:-30}
 while [ $# -gt 0 ]; do
   case "$1" in
     --message-file) msgfile=$2; shift 2 ;;
     --gates) gates=$2; shift 2 ;;
     --extra-gate) extra="$extra && $2"; shift 2 ;;
     --teardown) teardown=$2; shift 2 ;;
+    --refresh) refresh=$2; shift 2 ;;
     --trunk) trunk=$2; shift 2 ;;
     --attempts) attempts=$2; shift 2 ;;
     --lock-wait) lock_wait=$2; shift 2 ;;
@@ -103,12 +114,13 @@ owner_session() {   # <jq field>
 pid_started() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null && [ "$(pid_started "$1")" = "$2" ]; }
 
-lock_started=$(date +%s); last_report=""; ownerless_since=""
+lock_started=$(date +%s); reported=""; ownerless_since=""
 while :; do
   if mkdir "$lock" 2>/dev/null; then
     { echo "pid=$$"; echo "started=$(pid_started $$)"; echo "branch=$branch"
       echo "session=$(owner_session name)"; echo "session_id=$(owner_session sessionId)"; echo "since=$(date -u +%FT%TZ)"; } > "$lock/owner"
     held_lock=1
+    [ -z "$reported" ] || echo "==> lock acquired after $(( ($(date +%s) - lock_started) / 60 ))m"
     break
   fi
 
@@ -141,11 +153,11 @@ while :; do
     echo "This branch is untouched — land it once the other one is resolved." >&2
     exit 10
   fi
-  if [ "$waited" != "$last_report" ]; then   # once a minute, not once a tick
-    echo "==> waiting for ${l_branch:-another landing}${l_session:+ ($l_session)} to release the lock — ${waited}m of ${lock_wait}m"
-    last_report=$waited
+  if [ "$reported" != "$l_pid" ]; then   # once per holder: a second landing may take it before us
+    echo "==> land.lock held by ${l_branch:-another landing} (pid $l_pid${l_session:+, $l_session}) — waiting up to ${lock_wait}m"
+    reported=$l_pid
   fi
-  sleep 10
+  sleep 30
 done
 
 dirty=$(git -C "$wt" status --porcelain | wc -l | tr -d ' ')
@@ -188,6 +200,13 @@ while [ "$i" -lt "$attempts" ]; do
     git -C "$wt" rebase --abort 2>/dev/null
     echo "rebase conflict — branch and worktree left untouched" >&2
     exit 20
+  fi
+  if [ -z "$refresh" ] && [ -x "$repo/.claude/scripts/dispatch/worktree-refresh.sh" ]; then
+    refresh="\"$repo/.claude/scripts/dispatch/worktree-refresh.sh\" \"$wt\""
+  fi
+  if [ -n "$refresh" ]; then
+    echo "==> refresh the worktree for its new base: $refresh"
+    if ! (cd "$wt" && eval "$refresh"); then echo "worktree refresh failed after rebase" >&2; exit 21; fi
   fi
   echo "==> gates: $gates$extra"
   if ! (cd "$wt" && eval "$gates$extra"); then echo "gates red after rebase" >&2; exit 21; fi

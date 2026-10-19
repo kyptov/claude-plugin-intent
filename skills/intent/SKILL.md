@@ -17,8 +17,8 @@ then continue — never guess gates, because a wrong gate makes every downstream
 
 You are the **cockpit**. This skill is the only place in the workflow where interaction happens.
 Everything downstream runs unattended, so a detail you fail to pin down here becomes a decision an
-autonomous cheap-model run makes on its own at 3am. Spend interaction budget here; it is free compared to
-a wrong 8-hour run.
+autonomous cheap-model run makes on its own at 3am. Spend the interaction budget (§1) here; it is
+cheap compared to a wrong 8-hour run.
 
 **Do not write source code in this skill. The only file you create is the plan.** That is a binding
 rule here, not a mode — **do not enter plan mode**. The operator does not read the plan file, and the
@@ -75,17 +75,23 @@ a term appears in the codebase but not in the operator's office, it does not bel
 decide *how the code does it*. Good option text describes what changes for each kind of user the
 project declaration names, and what it costs them.
 
-**≤4 questions per round, and only questions whose answer changes what you build.** If you can resolve
-it by reading code, reading `docs/`, or applying a documented convention, resolve it — silently.
+**At most 3 `AskUserQuestion` calls, at most 4 questions each, recommended option first** — and only
+questions whose answer changes what you build. §6's approval is the one call outside that budget;
+`--quick` asks none. If you can resolve it by reading code, reading `docs/`, or applying a documented
+convention, resolve it — silently. Every fork the budget leaves unasked, you decide: log it in the
+plan's `## Decisions (agent-made)` as `- [decide] **<what you chose>** — over <the alternative>;
+why: <how it serves the intent>. Reverse by: <the concrete undo>.`, and name the one that matters
+most in §5's brief. Long interviews size long plans, and long runs are the ones that come back red.
 
 **Always leave the free-text door open.** Free-text answers regularly *add a requirement no option
 contained* — a safety check
 before overwriting, a validation rule, "test both approaches and show me the output first". When an
 answer arrives as free text, it is not a deviation from your options; **it is the requirement.**
-Fold it in and, if it opens a new fork, ask one more round.
+Fold it in and, if it opens a new fork and the budget has a call left, ask one more round; otherwise
+it is a `[decide]`.
 
-**Interview until intent is pinned, not until you have asked N questions.** Stop when you could
-defend every remaining choice against the stated intent without guessing.
+**Stop as soon as intent is pinned** — when you could defend every remaining choice against the
+stated intent without guessing. The budget is a ceiling, not a target.
 
 ### What to ask about (highest yield first)
 
@@ -125,8 +131,13 @@ every section. Rules:
   cheap-model run does not have to. A plan that says "see the security doc" costs the run that whole
   doc per slice.
 - **Slices** — vertical, ~2-3 files, each ending in a real repo command as its `[verify]` gate
-  (the project's slicing rule). For anything larger than ~6 slices, invoke `/decompose` **if the project provides that skill** and keep
-  its task file next to the plan.
+  (the project's slicing rule).
+- **Plan budget: at most 6 slices and about 80 paths across the `- Files:` lines.** Write it into the
+  plan's header, under the title, as `> Budget: ≤6 slices · ≤80 files — this plan: <n> slices ·
+  <m> files` — `/deliver` refuses a plan over it. Above the budget, split into two plans, each a
+  shippable step on its own; the second carries `after: <first slug>` on its own line under the
+  Budget line, and `/dispatch` holds it until the first has landed. Runs sized past this take three
+  to four hours and come back mixed.
 - **`## Out of scope`** — mark each item `[boundary]` (excluded by design: version-deferred, another
   doc's scope) or `[gap]` (real unbuilt work someone will want). `/land` routes on that mark, filing
   the `[gap]`s into the debt pool and letting the `[boundary]`s die with the plan. An unmarked item

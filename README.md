@@ -51,6 +51,10 @@ claude plugin marketplace add kyptov/claude-plugin-intent
 claude plugin install workflow@claude-plugin-intent
 ```
 
+An installed plugin is a cached copy and does not follow the repository: run
+`claude plugin update workflow@claude-plugin-intent` after each release, under the same
+`CLAUDE_CONFIG_DIR` as the install.
+
 **Run the cockpit in `bypassPermissions` mode.** A dispatched run is a subagent of the cockpit and
 inherits its permission mode; in any other mode the run parks on its first permission prompt.
 `/dispatch` refuses to start a run otherwise.
@@ -66,6 +70,13 @@ turns are back to back and a cockpit waits on runs for long stretches, so this s
 ```json
 { "promptCacheTtl": "1h", "subagentPromptCacheTtl": "5m" }
 ```
+
+Models: `/dispatch` and `/land` declare `model: sonnet` in their frontmatter — waiting, launching and
+running a script are babysitting. `/intent`, `/debt-review` and `/land`'s conflict re-attempt stay on
+the session's model or the declaration's escalation model (Opus), and runs use the declaration's
+implementation model. A skill's model covers the turn it runs in; a completion notification wakes the
+cockpit on the session's own model. To keep every babysitting turn on Sonnet, run a separate
+`claude --model sonnet` cockpit for `/dispatch` and `/land`, and interview in an Opus session.
 
 To work on the plugin itself, add a clone as a local directory marketplace instead. It is loaded **in
 place**: `${CLAUDE_PLUGIN_ROOT}` expands to your clone, and an edit is live at the next skill load.
@@ -98,9 +109,12 @@ It names, in whatever headings suit you:
 - **Users** — who uses the product, so `/intent` can ask in their terms.
 - **Worktree setup** — what makes a new worktree gateable. Without a setup script the hook infers the
   install from the lockfile and runs a `worktree:sync` package script if there is one; a project that
-  needs more (its own database per worktree) adds `.claude/scripts/dispatch/worktree-setup.sh` and
-  `worktree-teardown.sh` (step 3).
+  needs more (its own database per worktree) adds `.claude/scripts/dispatch/worktree-setup.sh`,
+  `worktree-teardown.sh` and `worktree-refresh.sh` — the last runs after `/land`'s rebase and before
+  its gates, so a worktree provisioned for an old base can re-migrate or re-codegen (step 3).
 - **Branch namespace** (default `wt`).
+- **max_parallel_runs** (default 5) — how many dispatched runs may work at once across every cockpit
+  in the repo; `/dispatch` queues the rest.
 - **Deploy commands** — `/deliver` never runs them; `/land` runs them only when the operator answers
   Yes to its closing "Deploy?" question.
 - **Protected files** — secret/env files a run must stop before touching.
@@ -126,7 +140,9 @@ so it needs these sections: `Context`, `Intent`, `Your calls`, `Agent's calls`, 
 `Where it runs`, `Model policy`, `Handoff` (with an `Auto: **<nothing | dispatch | deliver | both>**`
 line), `Slices` (each with `- Files:` and a `[verify]` command), `Gates`, `Out of scope` (items marked
 `[boundary]` or `[gap]`), `Decisions (agent-made)`, and `Not delivered` (entries tagged `[agent]` or
-`[operator]`). The same fixture has a complete template.
+`[operator]`). Under the title it carries the plan budget, `> Budget: ≤6 slices · ≤80 files — this
+plan: <n> slices · <m> files`, which `/deliver` enforces; a plan split to fit it carries
+`after: <slug>` on the next line. The same fixture has a complete template.
 
 Create the debt files the declaration names, even if empty.
 
@@ -140,7 +156,7 @@ works on throwaway fixtures before it finishes.
 | Prompt | Builds | Without it |
 |---|---|---|
 | `skills/deliver/BOOTSTRAP.md` | `.claude/scripts/deliver/{preflight,gate,report}.sh` and a shared `lib.sh` | `/deliver` stops before the first edit |
-| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches, and on a block held by another session a `VERDICT` line from the plugin's `skills/dispatch/wait-for.sh`; and, when worktrees need it, `worktree-{setup,teardown}.sh` | `/dispatch` stops (without the pair: install + `worktree:sync` only) |
+| `skills/dispatch/BOOTSTRAP.md` | `.claude/scripts/dispatch/preflight.sh` — land lock, dirty checkout, `## Handoff`, file overlap with unlanded branches, and on a block held by another session a `VERDICT` line from the plugin's `skills/dispatch/wait-for.sh`; and, when worktrees need it, `worktree-{setup,teardown,refresh}.sh` | `/dispatch` stops (without the worktree scripts: install + `worktree:sync` only, no refresh) |
 | `skills/intent/BOOTSTRAP.md` | `.claude/scripts/intent/plan-check.sh` — the one machine check on a plan before it is approved | `/intent` checks the plan by hand and says the script is missing |
 
 The three are independent; paste them in any order, or all in one session.
@@ -150,6 +166,8 @@ another session (its landing, lease, unlanded branch or uncommitted paths), it r
 `.claude/waits/<session-id>`, walks the other sessions' records for a cycle back to this one, and
 answers `CLEAR`, `WAIT`, `YIELD` or `FIX`. In a cycle the youngest session that can release what the
 other waits on — a lease, or uncommitted paths — yields; nobody asks the operator who should wait.
+The same helper queues dispatches for a run slot (`--resource run-slot`) once `max_parallel_runs`
+runs are working.
 
 ### 4. Try it
 

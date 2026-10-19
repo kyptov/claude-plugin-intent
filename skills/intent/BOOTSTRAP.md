@@ -66,6 +66,9 @@ CHECKS — the exit code is the interface:
       landing step routes on the mark, so an unmarked item silently disappears.
   46  The plan's slug already has a branch or a worktree. Catch it here, not at dispatch time, which
       is after the interview is over.
+  47  The plan is over budget: more than 6 slices, or more than 80 distinct paths across its
+      `- Files:` lines, or a `> Budget:` header line whose counts disagree with the plan's. /deliver
+      refuses such a plan; the fix is two plans, the second carrying `after: <first slug>`.
   0   Well-formed.
   64 usage · 65 not a git repo · 66 no such plan.
 
@@ -94,7 +97,7 @@ carried by the worktree-sync allow-list / ignored, consistent with the other mec
 FINALLY prove it works, and show me the output — do not just tell me it is written. Fill a copy of
 the template into a REAL well-formed plan first and show it passing clean (a check suite that has
 never returned 0 is not calibrated). Then break one thing at a time from that good plan and show
-each code: 40, 41, 20, 42, 43 (both an unknown script AND a missing file path), 44, 45, 46, plus
+each code: 40, 41, 20, 42, 43 (both an unknown script AND a missing file path), 44, 45, 46, 47, plus
 --set-handoff writing the line and the debt advisory firing without changing the exit code.
 Delete every fixture and branch you made.
 ```

@@ -8,10 +8,11 @@
 #   wait-for.sh check --resource <r> [flags]   one verdict; on WAIT, writes this session's record
 #   wait-for.sh wait  --resource <r> [flags]   the same check every 15s until it is not WAIT; run it
 #                                              detached — its exit is what wakes the session
-#   wait-for.sh clear [--self <sid>]           delete this session's record (dispatched, or gave up)
+#   wait-for.sh clear [--self <sid>]           delete this session's record and run-slot claims
+#                                              (dispatched, or gave up)
 #   wait-for.sh list                           every live record, one line each
 #
-#   <r>: land-lock | lease | branch <name> | dirty-checkout   (one argument: "branch wt/foo")
+#   <r>: land-lock | lease | branch <name> | dirty-checkout | run-slot   (one argument: "branch wt/foo")
 #   flags: --self <session-id>      default: CLAUDE_PID's entry in the session registry, else the
 #                                   nearest ancestor process that has one
 #          --lease <path>           the project's main-checkout lease file, as its declaration names it;
@@ -21,6 +22,8 @@
 #          --trunk <branch>         default origin/HEAD, else main
 #          --max-wait <minutes>     `wait` gives up after this long (default 100: under the 2h ceiling
 #                                   of a background Bash call, so the give-up is ours, not a kill)
+#          --max-runs <n>           run-slot only: the declaration's max_parallel_runs (default 5)
+#          --prefix <p>             run-slot only: the branch namespace (default $WT_BRANCH_PREFIX, else wt)
 #
 # Verdict — the first stdout line is `VERDICT <word> …`; skills route on the word, never re-derive it:
 #   CLEAR  0   nothing another session holds blocks this one any more (on a non-zero preflight exit
@@ -45,6 +48,14 @@
 #                   to the session that dispatched the run; `git branch -m` carries it to wt/<slug>.
 #   dirty-checkout  the lease holder: the only session the project lets write source in the main
 #                   checkout, so the only one those paths can be attributed to.
+#   run-slot        nobody: a count, not a holder. Running = a worktree on <prefix>/* whose dispatching
+#                   session (workflowSession) is alive and whose run has written no
+#                   .claude/deliver-state/*/verdict yet, plus the slots a CLEAR claimed in the last 10
+#                   minutes that have no worktree yet. CLEAR when running + the sessions queued ahead
+#                   of this one (live run-slot records, oldest `since` first) is under --max-runs; the
+#                   CLEAR claims the slot until `clear`. Otherwise WAIT, with `position=` and
+#                   `running=` on the verdict line. A queued cockpit holds nothing anyone waits on, so
+#                   a run-slot edge never closes a cycle.
 #
 # Liveness is pid + start time, never pid alone (a pid is reused): the registry file
 # $CLAUDE_CONFIG_DIR/sessions/<pid>.json carries `sessionId`, `procStart` (ps lstart IN UTC) and
@@ -63,11 +74,12 @@
 # leading `(` because bash 3.2 mis-parses a bare `)` in a case nested inside `$( … )`.
 set -uo pipefail
 
-usage() { echo "usage: wait-for.sh check|wait|clear|list --resource <land-lock|lease|branch <name>|dirty-checkout> [--self <sid>] [--lease <path>] [--lease-idle <min>] [--lock <dir>] [--trunk <branch>] [--max-wait <min>]" >&2; exit 64; }
+usage() { echo "usage: wait-for.sh check|wait|clear|list --resource <land-lock|lease|branch <name>|dirty-checkout|run-slot> [--self <sid>] [--lease <path>] [--lease-idle <min>] [--lock <dir>] [--trunk <branch>] [--max-wait <min>] [--max-runs <n>] [--prefix <p>]" >&2; exit 64; }
 
 mode=${1:-}; [ $# -gt 0 ] && shift
 case "$mode" in (check|wait|clear|list) ;; (*) usage ;; esac
 self=""; resource=""; lease=""; lease_idle=45; lock=".claude/land.lock"; trunk=""; max_wait=100
+max_runs=5; prefix=${WT_BRANCH_PREFIX:-wt}
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || usage
   case "$1" in
@@ -78,12 +90,14 @@ while [ $# -gt 0 ]; do
     (--lock) lock=$2 ;;
     (--trunk) trunk=$2 ;;
     (--max-wait) max_wait=$2 ;;
+    (--max-runs) max_runs=$2 ;;
+    (--prefix) prefix=$2 ;;
     (*) usage ;;
   esac
   shift 2
 done
 case "$resource" in
-  (land-lock|lease|dirty-checkout) ;;
+  (land-lock|lease|dirty-checkout|run-slot) ;;
   ("branch "?*) ;;
   ("") case "$mode" in (check|wait) usage ;; esac ;;
   (*) usage ;;
@@ -150,12 +164,16 @@ live_record() {
   echo "$f"
 }
 
-write_record() {   # holder resource
-  mkdir -p "$waits"
-  # Records are per-machine state, never content: keep them out of `git status`, or the dirty-checkout
-  # check would read our own record as uncommitted work and block on itself.
+# Records are per-machine state, never content: keep them out of `git status`, or the dirty-checkout
+# check would read our own record as uncommitted work and block on itself.
+waits_dir() {   # [subdir]
+  mkdir -p "$waits${1:+/$1}"
   grep -qsxF '.claude/waits/' "$common/info/exclude" \
     || { mkdir -p "$common/info" && echo '.claude/waits/' >> "$common/info/exclude"; }
+}
+
+write_record() {   # holder resource
+  waits_dir
   me=$(session_live "$self")
   # Keep the first `since` across refreshes, so `list` shows how long the wait has really lasted.
   since=$(field since "$waits/$self"); [ -n "$since" ] || since=$(date -u +%FT%TZ)
@@ -165,6 +183,48 @@ write_record() {   # holder resource
   mv "$tmp" "$waits/$self"   # rename is atomic: a reader never sees half a record
 }
 drop_record() { [ -n "$self" ] && rm -f "$waits/$self"; }
+
+# --- run slots ------------------------------------------------------------------------------------
+# One line per dispatched run still working: its worktree exists, its cockpit is alive, and it has not
+# written its verdict. A run that died without one counts until its cockpit lands or removes it —
+# /dispatch §5's seams table, which is what frees the slot.
+running_runs() {
+  git worktree list --porcelain \
+  | awk '/^worktree /{w=substr($0,10)} /^branch refs\/heads\//{print w "\t" substr($0,19)}' \
+  | while IFS="$tab" read -r w b; do
+      case "$b" in ("$prefix"/*) ;; (*) continue ;; esac
+      ls "$w"/.claude/deliver-state/*/verdict >/dev/null 2>&1 && continue
+      s=$(git config --get "branch.$b.workflowSession") || continue
+      session_live "$s" >/dev/null || continue
+      echo "$b"
+    done
+}
+# A CLEAR's claim covers the minutes between the verdict and the worktree the Agent call makes —
+# without it, the next cockpit in the queue reads the same free slot.
+claims="$waits/claims"
+live_claims() {
+  [ -d "$claims" ] || return 0
+  for f in "$claims"/*; do
+    [ -f "$f" ] || continue
+    c=$(basename "$f")
+    at=$(field at "$f")
+    if [ $(( $(now) - ${at:-0} )) -gt 600 ] || ! session_live "${c%%.*}" >/dev/null; then rm -f "$f"; continue; fi
+    echo "$c"
+  done
+}
+# Live sessions queued for a slot ahead of this one: oldest `since` first, session id breaks a tie.
+queued_ahead() {
+  mine=$(field since "$waits/$self"); [ -n "$mine" ] || mine=$(date -u +%FT%TZ)
+  for f in "$waits"/*; do
+    [ -f "$f" ] || continue
+    s=$(basename "$f")
+    [ "$s" != "$self" ] || continue
+    live_record "$s" >/dev/null || continue
+    [ "$(field resource "$f")" = run-slot ] || continue
+    o=$(field since "$f")
+    if [[ "$o" < "$mine" ]] || { [ "$o" = "$mine" ] && [[ "$s" < "$self" ]]; }; then echo "$s"; fi
+  done
+}
 
 # --- the block as it stands now -------------------------------------------------------------------
 lease_holder() {   # field 1 of the lease file, whatever its age
@@ -214,8 +274,9 @@ walk() {   # holder my-resource
 "
     f=$(live_record "$cur") || return 1
     r_res=$(field resource "$f"); r_hold=$(field holder "$f")
-    # A running landing waits on nothing, so no cycle passes through a land-lock edge.
-    [ "$r_res" != land-lock ] || return 1
+    # A running landing waits on nothing, and a queued cockpit holds nothing, so no cycle passes
+    # through a land-lock or a run-slot edge.
+    case "$r_res" in (land-lock|run-slot) return 1 ;; esac
     if [ "$r_hold" = "$self" ]; then
       printf '%s|%s\n%s' "$self" "$r_res" "$lines"
       return 0
@@ -240,6 +301,25 @@ paths() { git status --porcelain | sed 's/^/          /'; }
 
 # --- one evaluation; prints the verdict and returns its code ----------------------------------------
 evaluate() {
+  if [ "$resource" = run-slot ]; then
+    if [ -z "$self" ] || ! session_live "$self" >/dev/null; then
+      echo "VERDICT FIX — this session is not in the registry (${self:-no id}), so it cannot queue for a run slot"
+      return 32
+    fi
+    running=$(( $(running_runs | grep -c .) + $(live_claims | grep -c .) ))
+    ahead=$(queued_ahead | grep -c .)
+    if [ $(( running + ahead )) -lt "$max_runs" ]; then
+      drop_record
+      waits_dir claims
+      echo "at=$(now)" > "$claims/$self.$(now).$$"
+      echo "VERDICT CLEAR — run slot free ($running of $max_runs running); claimed until wait-for.sh clear"
+      return 0
+    fi
+    write_record "" run-slot
+    echo "VERDICT WAIT holder=none resource=run-slot position=$((ahead + 1)) running=$running/$max_runs — queued for a run slot"
+    echo "WAIT-CMD $wait_cmd"
+    return 30
+  fi
   if ! holder=$(resolve); then
     drop_record
     echo "VERDICT CLEAR — $resource is no longer held"
@@ -319,17 +399,22 @@ evaluate() {
 # The exact command `wait` needs, so a skill runs it verbatim instead of rebuilding it.
 q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 wait_cmd="$(q "$here/wait-for.sh") wait --self $(q "$self") --resource $(q "$resource") --lock $(q "$lock") --lease-idle $lease_idle --trunk $(q "$trunk") --max-wait $max_wait"
+[ "$resource" != run-slot ] || wait_cmd="$wait_cmd --max-runs $max_runs --prefix $(q "$prefix")"
 [ -z "$lease" ] || wait_cmd="$wait_cmd --lease $(q "$lease")"
 
 case "$mode" in
-  (clear) drop_record; exit 0 ;;
+  (clear) drop_record; [ -z "$self" ] || rm -f "$claims/$self".*; exit 0 ;;
   (list)
     [ -d "$waits" ] || exit 0
     for f in "$waits"/*; do
       [ -f "$f" ] || continue
       s=$(basename "$f")
       live_record "$s" >/dev/null || continue
-      echo "$(label "$s") waits on $(label "$(field holder "$f")") for $(field resource "$f") since $(field since "$f")"
+      if [ "$(field resource "$f")" = run-slot ]; then
+        echo "$(label "$s") queued for a run slot since $(field since "$f")"
+      else
+        echo "$(label "$s") waits on $(label "$(field holder "$f")") for $(field resource "$f") since $(field since "$f")"
+      fi
     done
     exit 0 ;;
   (check) evaluate; exit $? ;;

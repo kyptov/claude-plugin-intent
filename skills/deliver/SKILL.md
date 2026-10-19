@@ -56,6 +56,11 @@ your work by that name.
 If the rename fails because `<prefix>/<slug>` already exists, an earlier run of this plan is unlanded:
 stop, and say so in your report.
 
+Then **refuse an oversized plan.** `/intent` writes the budget into the plan's header — at most 6
+slices and about 80 paths across the `- Files:` lines. Count both. Over it, implement nothing: end
+with §7's report (`gates: not-run`), naming which number is over and that `/intent` should split the
+plan into two with an `after:` line. A plan with no Budget line is held to the same numbers.
+
 ## 0c. The mechanics scripts — no script, no run
 
 The deterministic half of this skill — preflight, the gates, the end-of-run bookkeeping — belongs to
@@ -123,6 +128,10 @@ in `Not delivered` with the evidence and carry on. Do not fix another session's 
 never end a turn claiming green when it is not. Integration suites that hit a live database follow
 the declaration's hygiene rules (marker-prefixed seeds, documented teardown order) — residue from an
 aborted run is a real cost.
+
+**A gate that calls a paid model (the declaration's journey judge, or any other) runs at most twice
+per slice.** Timing, worker-count or flakiness sweeps against it are forbidden: file them as
+`[agent]` debt in `## Not delivered` instead.
 
 **Escalation is an exit code, not a judgement.** `gate.sh` counts failed cycles per slice and says
 which one you are on: first red → fix and re-run, do not escalate (most are imports and typos);

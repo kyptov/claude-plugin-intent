@@ -4,8 +4,8 @@
 stop. **Paste the block below into a Claude session in the project that needs it** — it states the
 contract, not the implementation, so the script comes out shaped by that project's own locks, trunk
 and plan template rather than copied from another repo's. When the project's worktrees need setup
-beyond an install — a database of their own — the same prompt writes the worktree setup/teardown pair
-the plugin's worktree hooks run.
+beyond an install — a database of their own — the same prompt writes the worktree setup, teardown and
+post-rebase refresh scripts the plugin's worktree hooks and land.sh run.
 
 Its sibling is **`../deliver/BOOTSTRAP.md`**, which builds the three `/deliver` mechanics scripts.
 A project needs both — each skill stops on its own missing script — and they are independent, so
@@ -99,7 +99,7 @@ RULES:
 
 ALSO, only if this project's worktrees need more than a dependency install and a `worktree:sync`
 package script to be gateable — a database of their own, a port, a generated env file — write the
-pair the plugin's worktree hooks and land.sh call:
+scripts the plugin's worktree hooks and land.sh call:
 
   .claude/scripts/dispatch/worktree-setup.sh <worktree>     run from the main checkout, after
       `git worktree add`, before the run's first turn. It replaces the default (install inferred from
@@ -110,6 +110,11 @@ pair the plugin's worktree hooks and land.sh call:
       removed: by land.sh after a landing, and by the plugin's worktree-remove.sh for a run that
       ended with nothing on its branch.
       It must be idempotent and must tolerate a half-built worktree (a setup that failed midway).
+  .claude/scripts/dispatch/worktree-refresh.sh <worktree>   run inside the worktree by land.sh after
+      every successful rebase, before the gates: bring what setup provisioned up to the new base —
+      re-migrate the worktree's database, re-run codegen, reinstall when the lockfile changed. Exit 0 =
+      ready to gate; anything else fails the landing as red (land.sh exit 21), branch kept. It must be
+      safe to run when the rebase brought nothing in.
   Everything setup writes into the worktree must be gitignored (an untracked file is a dirty worktree
   to land.sh). Every per-worktree resource is named FROM THE WORKTREE PATH, so the teardown can find what the
   setup made without any state of its own, and two worktrees never share one.
@@ -124,7 +129,8 @@ THEN wire it up:
    landing step both read "dirty worktree", so an untracked script would block on itself.
 
 FINALLY prove it works, and show me the output — do not just tell me it is written:
-- if you wrote the worktree pair: setup on a throwaway worktree leaves it gateable, teardown removes
+- if you wrote the worktree scripts: setup on a throwaway worktree leaves it gateable, refresh after
+  a commit on the trunk that adds a migration leaves it gateable on the new base, teardown removes
   every resource setup made, and teardown run twice exits 0;
 - a dirty main checkout -> 13;
 - the plan template's placeholder Handoff -> 20, and a real `Auto: **dispatch**` -> passes;

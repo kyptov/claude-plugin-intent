@@ -108,7 +108,7 @@ Project inputs for the generic workflow skills (`intent` → `dispatch` → `del
 | `deliver/preflight.sh` | main-checkout refusal, install present, baseline | `0` ready · `65` main checkout · `70` not installed |
 | `deliver/gate.sh --slice <id>` / `--full` | the gates from touched paths; per-slice failure counting | `0` green · `30` first red · `31` second → escalate · `32` third → stop |
 | `deliver/report.sh <plan>` | `## Decisions (agent-made)` + `## Not delivered` present and tagged; prints the cockpit line | `0` · `40` untagged · `41` missing section |
-| `intent/plan-check.sh <plan>` | sections vs template, placeholders, slice `- Files:` + `[verify]`, canon anchors, `## Out of scope` marks, slug collision; `--set-handoff <v>` | `0` · `20` Handoff · `40` section · `41` placeholder · `42` slice · `43` verify · `44` anchor · `45` scope mark · `46` slug taken |
+| `intent/plan-check.sh <plan>` | sections vs template, placeholders, slice `- Files:` + `[verify]`, canon anchors, `## Out of scope` marks, slug collision, plan budget; `--set-handoff <v>` | `0` · `20` Handoff · `40` section · `41` placeholder · `42` slice · `43` verify · `44` anchor · `45` scope mark · `46` slug taken · `47` over budget |
 | `dispatch/preflight.sh <plan> --waitfor <wait-for.sh>` | `land.lock`, clean main checkout, `## Handoff`, overlap with unlanded `wt/*`; a `VERDICT` line from the plugin's `wait-for.sh` on any block another session holds | `0` · `10` land.lock · `11` lease · `12` overlap · `13` dirty · `20` Handoff |
 
 All under `.claude/scripts/`.
@@ -125,6 +125,7 @@ All under `.claude/scripts/`.
 - **Worktree setup:** the worktree hook's default (install inferred from the lockfile). No sync step,
   no setup script.
 - **Branch namespace:** `wt/<slug>`.
+- **max_parallel_runs:** 5.
 - **Deploy commands** (never run by `/deliver` or `/land`): `npm run deploy`.
 - **Branch triage file:** `docs/planning/branch-triage.md`.
 
@@ -151,6 +152,8 @@ done
 
 cat > docs/plans/_plan-template.md <<'EOF'
 # <capability, in plain words>
+
+> Budget: ≤6 slices · ≤80 files — this plan: <n> slices · <m> files
 
 > Contract file. `/intent` writes it; `/deliver` executes it; `/land` merges the result, sweeps the
 > two sections at the bottom into the debt destinations, and deletes this file in the same commit.
@@ -226,6 +229,8 @@ EOF
 # (under a minute, a day or more) so /deliver has something real to decide alone.
 cat > docs/plans/duration-format.md <<'EOF'
 # Run durations read as hours and minutes
+
+> Budget: ≤6 slices · ≤80 files — this plan: 1 slice · 3 files
 
 > Contract file. `/intent` writes it; `/deliver` executes it; `/land` merges the result, sweeps the
 > two sections at the bottom into the debt destinations, and deletes this file in the same commit.

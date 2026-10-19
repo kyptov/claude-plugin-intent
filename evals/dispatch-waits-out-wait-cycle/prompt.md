@@ -40,3 +40,5 @@ Results of the commands you will need, in the order they happen:
   `VERDICT CLEAR — lease is no longer held`
 - the preflight, SECOND run → exit 0, prints `unlanded wt/time-canon (+1) — no overlap with this plan`, `PASS   handoff: both`, `VERDICT CLEAR`
 - `git show-ref --verify --quiet refs/heads/wt/csv-durations` → exit 1 (no such branch)
+- `wait-for.sh check --resource run-slot …` (the run-slot check) → exit 0, prints `VERDICT CLEAR — run slot free (1 of 5 running); claimed until wait-for.sh clear`
+- `wait-for.sh clear` → exit 0, no output
