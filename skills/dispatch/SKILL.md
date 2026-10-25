@@ -244,7 +244,13 @@ line in the reply at each of these, one line each:
 | a plan queued for a run slot (§1c) | `<slug>: queued — position <n>, <running> running` |
 
 A green report with `Handoff: ship` or `both` gets no line of its own: the landing follows in the
-same turn and `/land`'s line says how it ended. Never on a slice, a wave start, or a wait that is still going.
+same turn and `/land`'s line says how it ended.
+
+**Every "needs you" row above ends the turn with one `AskUserQuestion`, not with prose**: header the
+event (`RED`, `BLOCKED`, `Timed out`), question = the line itself plus the two or three facts a
+decision needs, options the real choices with the recommended one first. A question is what marks the
+session as finished-and-waiting in the app; a reply that ends in text is indistinguishable from a
+cockpit still waiting on a run. `/land` §8a's `Done` question is the same marker for the green path. Never on a slice, a wave start, or a wait that is still going.
 
 ## 5. Then land
 
