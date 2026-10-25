@@ -111,7 +111,7 @@ owner_session() {   # <jq field>
   done
 }
 # A pid is reused; a pid whose process started at the recorded moment is not.
-pid_started() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }
+pid_started() { LC_ALL=C ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//;s/ *$//'; }   # C locale: the lock owner and its reader may run under different LANGs
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null && [ "$(pid_started "$1")" = "$2" ]; }
 
 lock_started=$(date +%s); reported=""; ownerless_since=""

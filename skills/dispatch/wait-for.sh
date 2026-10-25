@@ -121,14 +121,17 @@ now() { date +%s; }
 # --- sessions -------------------------------------------------------------------------------------
 # `born<TAB>name<TAB>pid` of the LIVE process carrying this session id; fails when none is alive. A
 # crashed session leaves its registry file behind, so a file alone proves nothing: its pid must be
-# running AND have started at the recorded instant. procStart is written in UTC, hence TZ=UTC.
+# running AND have started at the recorded instant. procStart is written in UTC, hence TZ=UTC —
+# and in the C locale, hence LC_ALL=C: a session spawned under en_NZ.UTF-8 prints `Sun 25 Oct` where
+# the registry holds `Sun Oct 25`, and every live session read as dead (80 false FIX verdicts in the
+# week of 2026-10-19).
 session_live() {
   [ -n "$1" ] && [ -d "$sessions" ] || return 1
   jq -r --arg s "$1" 'select(.sessionId == $s) | [.pid, .procStart, .startedAt, (.name // "")] | @tsv' \
     "$sessions"/*.json 2>/dev/null \
   | while IFS="$tab" read -r pid ps0 born name; do
       [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
-      [ "$(TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$ps0" ] || continue
+      [ "$(LC_ALL=C TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$ps0" ] || continue
       printf '%s\t%s\t%s\n' "$born" "$name" "$pid"
       break
     done | grep .   # the loop is a subshell: an empty output is how "not alive" reaches the caller
@@ -240,7 +243,7 @@ resolve() {
       # land.sh's own rule, in its own terms (it writes `started` from a local-time lstart): a lock
       # whose process is gone is taken over by the next landing, so it blocks nobody.
       if [ -n "$l_pid" ]; then
-        kill -0 "$l_pid" 2>/dev/null && [ "$(ps -o lstart= -p "$l_pid" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$l_start" ] || return 1
+        kill -0 "$l_pid" 2>/dev/null && [ "$(LC_ALL=C ps -o lstart= -p "$l_pid" 2>/dev/null | sed 's/^ *//;s/ *$//')" = "$l_start" ] || return 1
       fi
       sid=$(field session_id "$lock/owner")
       echo "${sid:-pid:${l_pid:-?}}" ;;

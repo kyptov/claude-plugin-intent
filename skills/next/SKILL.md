@@ -83,9 +83,10 @@ Read only what ranking needs — never a whole multi-thousand-line ledger in the
    because a pool that only takes in work becomes a graveyard.
 
 Each recommendation is one line of why plus one paste-ready command: `/land <branch>`,
-`/dispatch <plan>`, `/operate`, or `/intent <what changes for a user, one sentence> — <source>`
+`/dispatch <plan>`, `/operate`, or `/intent --approved <what changes for a user, one sentence> — <source>`
 where the source is the goals file + goal title, the roadmap + phase, or the pool path + subsection +
-verbatim title.
+verbatim title. `--approved` because pasting the line is the approval (`/intent` §0b); drop it when
+the recommendation itself says a decision is still owed.
 
 ## 6. Keep the pool fresh without being asked
 

@@ -105,6 +105,14 @@ by" must be a real instruction, not "revert the commit".
 Stopping means: commit what is green, write the reason into `## Not delivered`, send one
 `PushNotification` under 200 characters naming the decision needed, and end. Never stop silently.
 
+### One progress line, at the 30-minute mark
+
+Note the clock (`date +%s`) when §2's preflight passes. The first time a slice ends **more than 30
+minutes after that**, send one `PushNotification` — `<slug>: 30 min in — slice <k>/<n> green, <n-k>
+left` — and never another. Not at a slice before that mark, not at the end (your report is the end).
+Measured over the week of 2026-10-19: the operator typed "status?" ten times, every time into a
+cockpit that had been silent 11–50 minutes while a run built; this line is what answers it.
+
 ## 2. Gates — you may not end a turn on a broken tree
 
 **You do not assemble gates — the project's `gate.sh` does** (§0c). Run its **per-slice form** after

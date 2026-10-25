@@ -2,7 +2,6 @@
 name: dispatch
 description: Cockpit dispatcher — take an approved plan contract and start its unattended /deliver run as a background subagent in a worktree of its own; also reports the status of running work and unlanded branches. Use after /intent is approved, or when the operator asks to start, queue, check, or parallelise implementation work. Not for interviewing (/intent), implementing (/deliver), or merging (/land).
 argument-hint: plan path(s)
-model: sonnet
 ---
 
 # Dispatch a plan into its worktree
@@ -20,11 +19,12 @@ You are the cockpit: a long-lived `--remote-control` session on a machine that s
 device. **You never implement a feature yourself** — that keeps your context plan-sized, your cost
 low, and your replies fast on a phone. You interview, dispatch, report, and land.
 
-**This skill runs on Sonnet** (`model: sonnet` above): dispatching, waiting and reporting are
-babysitting, not thinking. The override covers the turn the skill runs in; a completion
-notification wakes the session on its own model, and §5's `/land` switches back to Sonnet. A project
-that wants every cockpit turn on Sonnet runs a separate `claude --model sonnet` cockpit for
-dispatch and land, and interviews (`/intent`) in an Opus session that hands it the plan.
+**A skill's `model:` frontmatter does not change the cockpit's model** — measured over the week of
+2026-10-19, with `model: sonnet` on this skill and `/land`, 99.9% of cockpit tokens ran on the
+session's own model. Dispatching, waiting and reporting are babysitting, not thinking, so what keeps
+the cockpit cheap is keeping it plan-sized (never implementing here) and, when cost matters, a
+separate `claude --model sonnet` cockpit for dispatch and land, with interviews (`/intent`) in an
+Opus session that hands it the plan.
 
 **The cockpit runs in `bypassPermissions` mode.** A run is a subagent of this session and inherits its
 permission mode, so in any other mode the run's first permission prompt surfaces here and parks the
@@ -150,14 +150,15 @@ placeholder (`<nothing | dispatch | …>`) the same as a missing answer. **Honou
 
 | Handoff | What you do |
 |---|---|
-| **`both`** — the normal case, and what `/intent` offers | start the run in the background, and invoke `/land` yourself when it reports green. §3 → §4 → §5, one continuous sequence |
-| `dispatch` | same, but stop at a finished branch and report it is ready for `/land` |
+| **`ship`** — the normal case, and what `/intent` offers | start the run in the background, invoke `/land` yourself when it reports green, and `/land` runs the declaration's deploy commands after the landing (`/land` §8). §3 → §4 → §5, one continuous sequence |
+| `both` | the same, but `/land` ends with its "Deploy?" question instead of deploying — the operator ships |
+| `dispatch` | start the run, but stop at a finished branch and report it is ready for `/land` |
 | `deliver` | the same `Agent` call in the **foreground** (`run_in_background: false`), so the operator watches it in this session |
 | `nothing` | you should not have been invoked; say so and stop |
 
-**Every handoff that runs, runs now** — there is no deferred or queued path (§3). The two middle rows
-arrive only as a free-text override at `/intent` §6, which offers `both` or nothing; treat `both` as
-the default reading of any ambiguous answer.
+**Every handoff that runs, runs now** — there is no deferred or queued path (§3). The three middle
+rows arrive only as a free-text override at `/intent` §6, which offers `ship` or nothing; treat
+`ship` as the default reading of any ambiguous answer.
 
 If `## Handoff` is missing or unreadable, the plan did not come through `/intent`. Ask once, then
 write the answer into the plan before doing anything else.
@@ -214,7 +215,7 @@ The harness tells you when a run ends; you do not ask. When a completion notific
 
 1. Read the run's final message. Its `DELIVERED <slug> — gates: …` line is the verdict, and the
    notification's worktree path is where the branch lives.
-2. Act per §5: land on `gates: green` when `## Handoff` is `both`; report anything else.
+2. Act per §5: land on `gates: green` when `## Handoff` is `ship` or `both`; report anything else.
 
 When the operator asks "what is running" — or on their first message of the day — answer in plain
 words, not in tool output:
@@ -235,22 +236,22 @@ line in the reply at each of these, one line each:
 
 | Event | Line |
 |---|---|
-| a run's final report arrives green, `Handoff` is not `both` | `<slug>: green — ready to /land` |
+| a run's final report arrives green, `Handoff` is `dispatch` | `<slug>: green — ready to /land` |
 | a run's final report arrives `RED` or `not-run`, or with no verdict | `<slug>: RED — <failing gate or stop reason> — needs you` |
 | `/land` finishes | `/land` §5b sends it: `<slug>: landed <short hash>` or `<slug>: not landed — exit <code> — <what it needs>` |
 | a wait ends `TIMEOUT` | `<slug>: wait timed out — <resource> held by <holder> — needs you` |
 | a block this cockpit cannot clear (`YIELD`, `FIX`, no `VERDICT`, preflight `20`) | `<slug>: BLOCKED — <reason> — needs you` |
 | a plan queued for a run slot (§1c) | `<slug>: queued — position <n>, <running> running` |
 
-A green report with `Handoff: both` gets no line of its own: the landing follows in the same turn
-and `/land`'s line says how it ended. Never on a slice, a wave start, or a wait that is still going.
+A green report with `Handoff: ship` or `both` gets no line of its own: the landing follows in the
+same turn and `/land`'s line says how it ended. Never on a slice, a wave start, or a wait that is still going.
 
 ## 5. Then land
 
 Runs are not done until `/land` has put them on `main` as one commit each. A finished run with
 an unlanded branch is the failure mode this whole pipeline exists to prevent — chase it the same day.
 
-**For `Handoff: both`, land on the run's own `DELIVERED … gates: green` verdict — nothing else.**
+**For `Handoff: ship` or `both`, land on the run's own `DELIVERED … gates: green` verdict — nothing else.**
 `gates: RED` or `not-run` is a report to the operator, not a licence to land, and so is a branch that
 merely holds commits: it reads the same whether the run finished or died mid-slice.
 
@@ -265,4 +266,4 @@ dropped:
 | run → cockpit | the run ended without a `DELIVERED` line — it crashed or ran out of turns | read `<worktree>/.claude/deliver-state/<slug>/verdict`. A green verdict there is the run's own judgement: land on it. No verdict → report to the operator; do not land |
 | run → cockpit | the run ended with nothing on its branch — it stopped before its first commit, or `/land` exits 24 | Claude Code keeps every agent worktree, and the project's setup may have made a database for it. Report the run, then remove it — teardown, worktree, branch: `echo '{"worktree_path":"<worktree>"}' \| "${CLAUDE_PLUGIN_ROOT}"/skills/dispatch/worktree-remove.sh` |
 | cockpit ended first | the session closed while runs were working, and its runs ended with it | the worktree holds the commits, on `<prefix>/<slug>` (or `<prefix>/agent-<id>` if it died before renaming). A verdict file says green → `/land`; otherwise tell the operator, who removes the worktree and branch and dispatches again |
-| cockpit → land | nobody invokes `/land`, and a finished branch waits | `Handoff: both` means you land it, on the verdict, in the same turn the notification arrives |
+| cockpit → land | nobody invokes `/land`, and a finished branch waits | `Handoff: ship` or `both` means you land it, on the verdict, in the same turn the notification arrives |

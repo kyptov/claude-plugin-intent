@@ -1,8 +1,7 @@
 ---
 name: land
-description: Merge a finished worktree branch into the trunk as exactly one commit — squash, rebase onto origin, re-run the gates, fast-forward, push, remove the worktree, delete the branch — retrying when another run lands first and never abandoning a branch silently. Invoked by /dispatch when the plan's Handoff is "both", or by the operator to land, merge, or clean up a worktree. Not for planning (/intent) or implementing (/deliver).
+description: Merge a finished worktree branch into the trunk as exactly one commit — squash, rebase onto origin, re-run the gates, fast-forward, push, remove the worktree, delete the branch — retrying when another run lands first and never abandoning a branch silently. Invoked by /dispatch when the plan's Handoff is "ship" or "both" (ship = it also runs the deploy commands after the landing), or by the operator to land, merge, or clean up a worktree. Not for planning (/intent) or implementing (/deliver).
 argument-hint: worktree path or branch name; omit to land every finished worktree in turn
-model: sonnet
 ---
 
 # Land a worktree onto main
@@ -22,9 +21,10 @@ sit unmerged indefinitely, because nothing forces the merge and no session list 
 Invariants: `main` stays **linear**, gets **one commit per feature**, and **no branch is ever left
 behind quietly.**
 
-**This skill runs on Sonnet** (`model: sonnet` above): a landing is waiting, a script and an exit
-code. The one step that needs thinking — §6's conflict re-attempt — runs in a nested `Agent` at the
-declaration's escalation model.
+A landing is waiting, a script and an exit code; the one step that needs thinking — §6's conflict
+re-attempt — runs in a nested `Agent` at the declaration's escalation model. (A `model:` line in this
+frontmatter would not make the landing cheaper: the harness runs a skill turn on the session's
+model, measured 2026-10-25 — see `/dispatch` §0.)
 
 ---
 
@@ -188,7 +188,8 @@ a wait cycle` with the paths it lists, and leave the branch for the next `/land`
 are this session's own or nobody's: report them for the operator to commit or stash. None of these
 is a question, and none touches the branch: it stays rebased and green.
 
-**Do not deploy on your own.** That word belongs to the operator — §8 asks for it.
+**Do not deploy on your own.** The deploy word belongs to the operator; they give it either in the
+plan (`## Handoff: ship`, the `/intent` default) or to §8's question (`both`).
 
 ### 5b. Tell the operator — one line per landing
 
@@ -203,7 +204,29 @@ question still follows a green landing.
 
 ## 6. When it does not land
 
-On a rebase conflict, red gates after rebase, or a 3rd refused fast-forward:
+### 6a. A red that is the trunk's, not the branch's — a policy, never a question
+
+Exit 21 with red gates is first a question of **whose red it is**. Measured over the week of
+2026-10-19: every "trunk is red on X, land anyway?" question the cockpit asked, the operator answered
+the same way — land, and deal with X separately. So decide it:
+
+1. Name the failing test or check from the gate output.
+2. It is **the trunk's red** when both hold: the branch's squashed diff touches neither the failing
+   test's file nor the source it exercises (read the test's imports), **and** the same command is red
+   at the trunk tip in the main checkout (run just that test there — never the whole gate — and
+   never edit the main checkout to find out).
+3. Then: if the fix is a few lines (a fixture, a stale snapshot, a date), fix it **on the trunk in the
+   main checkout** as its own commit — a `fix` in the project's commit style, the one commit this
+   skill may make outside a landing — and re-run `land.sh`; the rebase picks it up. If it is more
+   than that, re-run `land.sh` with that one command removed from `--gates` / `--extra-gate`,
+   file the red as a `[READY|<date>]` item in the debt intake (§2's format, source: this landing),
+   and say so in §5b's line: `<slug>: landed <hash> over trunk's red <test> — filed`.
+4. A red the branch **does** touch, or one you cannot prove at the trunk tip, is the branch's: §6b.
+
+### 6b. The branch's own red, a conflict, or a refused fast-forward
+
+On a rebase conflict, red gates after rebase that §6a could not attribute to the trunk, or a 3rd
+refused fast-forward:
 
 1. Re-attempt that step once at the declaration's escalation model/effort — a foreground `Agent`
    with that `model` and `effort`, handed the worktree, the exit and its output. Conflicts are
@@ -226,12 +249,42 @@ What is worth doing after a green land is confirming what the landing removes �
 from `git worktree list` and the branch from `git branch` (§5, exit 0). A branch that survives its own
 landing is the backlog this skill exists to prevent.
 
-## 8. Ask "Deploy?" — the last thing you do
+## 8. Ship — the last thing you do
 
-A landing that ends in a report leaves the chat idle with nothing flagging it. End every green run
-with one `AskUserQuestion` instead — it notifies the operator, and their answer is the deploy word.
+A landing that ends in a report leaves nothing on production and nothing flagging it. What happens
+next is decided by the plan's `## Handoff`, read from the plan file **before** §2's sweep deletes it:
 
-Ask it once, after the last landing of this run (a no-argument `/land` lands several), when:
+### 8a. `ship` — run the deploy commands, no question
+
+When the declaration lists deploy commands and at least one landing exited 0, run them **once,
+after the last landing you have in hand in this turn** (a no-argument `/land` lands several; a wave
+whose runs land minutes apart ships once at the end, and a run still building never holds the
+ship). Run the declaration's routine deploy command from the main checkout, in the background,
+with the target the landed diffs need — the declaration's "Deploy" section says how targets map to
+paths; when it does not, run the default target. A landing that touches nothing the deploy ships
+(mobile-only, docs-only) ships nothing: say so.
+
+Read the command's exit code, then:
+
+- shipped → one `PushNotification` and the same line in the reply: `shipped <hash> — <targets>`;
+- it stopped for a decision the script itself refuses to make (the declaration's exit codes for a
+  pending production migration or a host-env change) → **this is the one question**: a single
+  `AskUserQuestion`, header `Ship`, carrying the script's own words (what is pending, by name) and
+  offering `Approve and re-run` (first) / `Hold`. The operator's Approve is the word for that
+  specific item; re-run with the flag the script names. Never pass an approval flag unasked;
+- any other non-zero exit (a precondition, a red gate, a failed deploy or verify) → full output in
+  the report, one `PushNotification` `<slug>: not shipped — exit <code> — <last line>`; do not
+  retry and roll nothing back on your own.
+
+A `/land` running inside a background `/dispatch` subagent has no operator for the question above:
+it ships on a clean exit and ends with its report on anything else.
+
+### 8b. `both` — ask "Deploy?"
+
+For `both` (the operator chose to ship by hand), end with one `AskUserQuestion` instead — it
+notifies the operator, and their answer is the deploy word.
+
+Ask it once, after the last landing of this run, when:
 
 - at least one landing exited 0, and
 - the declaration lists deploy commands, and

@@ -1,7 +1,7 @@
 ---
 name: intent
-description: Phase 1 of the two-phase workflow — interview the operator to pin down what they want, decide every technical detail yourself, and write an executable plan contract (path per .claude/workflow.md) for /deliver to run unattended. Use for any new idea, feature, rough direction, "is this a good idea?", or a debt-pool item that will become implementation work; `--quick` skips the interview for a small visible tweak. Not for executing a plan (/deliver), merging a finished worktree (/land), or questions answerable by reading code.
-argument-hint: [--quick] [rough idea, or a path to an existing plan/spec to turn into a contract]
+description: Phase 1 of the two-phase workflow — interview the operator to pin down what they want, decide every technical detail yourself, and write an executable plan contract (path per .claude/workflow.md) for /deliver to run unattended. Use for any new idea, feature, rough direction, "is this a good idea?", or a debt-pool item that will become implementation work; `--quick` skips the interview for a small visible tweak; `--approved` skips the interview and the approval for an item the operator already approved by pasting it (a meeting list, a debt wave). Not for executing a plan (/deliver), merging a finished worktree (/land), or questions answerable by reading code.
+argument-hint: [--quick | --approved] [rough idea, or a path to an existing plan/spec to turn into a contract]
 ---
 
 # Interview → contract
@@ -55,10 +55,26 @@ interview from §1.** Never quietly shrink a real feature to fit the lane.
    the canon anchors that actually cover the touched files.
 3. **§5's brief shrinks to one or two sentences:** what will look or act differently, and the one
    call you made that they might not have.
-4. **§6 asks nothing: `--quick` is the approval.** Set `## Handoff` to `both`, commit the plan (§6),
+4. **§6 asks nothing: `--quick` is the approval.** Set `## Handoff` to `ship`, commit the plan (§6),
    and invoke `/dispatch` in the same turn — the brief goes in that same reply. The one exception: if
    reading the code turned up two plausible readings that would *look* different to the user, ask a
    single question that offers both readings as its options; the answer is the approval.
+
+## 0b. `--approved` — the lane for an item the operator already approved
+
+When `$ARGUMENTS` starts with `--approved`, the operator is saying: *I read this item and decided it
+before I pasted it; do not ask me again.* It is how a batch arrives — the `/intent` lines
+`/debt-review` and `/next` hand back, the numbered items of a meeting's findings list, a spec they
+already agreed to. Measured 2026-10-22: four such plans each waited two hours for a Handoff click
+the operator had effectively given by pasting them.
+
+It differs from `--quick` in one way only: **the plan has no size limit.** Everything else of
+`--quick`'s four changes applies — no interview (every fork is a `[decide]` in `## Agent's calls`),
+the full template and plan-check, a short brief, and **§6 asks nothing: `## Handoff` is `ship`**,
+commit, `/dispatch` in the same turn. The one exception stands too: two readings that would *look*
+different to a user earn a single question with both as options. Never downgrade an `--approved`
+item to an interview because it is large — split it into two plans with an `after: <slug>` line
+instead, both `--approved`.
 
 ---
 
@@ -77,7 +93,7 @@ project declaration names, and what it costs them.
 
 **At most 3 `AskUserQuestion` calls, at most 4 questions each, recommended option first** — and only
 questions whose answer changes what you build. §6's approval is the one call outside that budget;
-`--quick` asks none. If you can resolve it by reading code, reading `docs/`, or applying a documented
+`--quick` and `--approved` ask none. If you can resolve it by reading code, reading `docs/`, or applying a documented
 convention, resolve it — silently. Every fork the budget leaves unasked, you decide: log it in the
 plan's `## Decisions (agent-made)` as `- [decide] **<what you chose>** — over <the alternative>;
 why: <how it serves the intent>. Reverse by: <the concrete undo>.`, and name the one that matters
@@ -207,14 +223,20 @@ authorises everything downstream; there is no second gate behind it.
 
 | Option | What you do next | Ends with |
 |---|---|---|
-| **Proceed — build it and land it** *(recommend this; the default answer)* | invoke `/dispatch`, which makes the worktree and starts the unattended run; `/land` squashes it onto the trunk as one commit when the gates are green | the feature landed and pushed |
+| **Proceed — build it, land it and ship it** *(recommend this; the default answer)* | invoke `/dispatch`, which makes the worktree and starts the unattended run; `/land` squashes it onto the trunk as one commit when the gates are green, then runs the declaration's deploy commands (`/land` §8) | the feature landed, pushed and on production |
 | **Just save the plan** | stop here and say the plan is ready | a plan file |
 
-**Offer only these two.** `AskUserQuestion` always offers free text, so "build it but leave the
-landing to me" (`dispatch`) or "run it while I watch" (`deliver`) arrives as an override — fold it in,
-exactly as §1 says. `## Handoff` accepts all four values and `/dispatch` routes on all four.
+**Offer only these two.** `AskUserQuestion` always offers free text, so "land it but I ship"
+(`both`), "build it but leave the landing to me" (`dispatch`) or "run it while I watch" (`deliver`)
+arrives as an override — fold it in, exactly as §1 says. `## Handoff` accepts all five values and
+`/dispatch` routes on all five. The deploy word is given here, once: measured over the week of
+2026-10-19, `/land`'s separate "Deploy?" question was 65 of 324 questions, answered Yes two times in
+three, and nine of them sat overnight. A plan that must not reach production on its own (a migration
+the operator wants to watch, a change to hold for a batch) is the `both` override, and `ship` still
+stops where the deploy script stops — a pending migration or a host-env change is asked once, by
+`/land` §8, never decided.
 
-Write the answer into the plan's `## Handoff` **before** you do anything else with it — `both` for
+Write the answer into the plan's `## Handoff` **before** you do anything else with it — `ship` for
 Proceed, `nothing` for Just save (the plan-check script's `--set-handoff <value>` does exactly this). That one line is the recovery path: if this turn dies, `/dispatch`
 reads the answer from the file instead of asking the operator to decide twice.
 
@@ -254,7 +276,8 @@ round**: this skill does not enter plan mode (§0), and the operator has already
 
 | `## Handoff` | Your immediate next action |
 |---|---|
-| `both` | `Skill(dispatch)` — it reads `## Handoff` itself and lands when green |
+| `ship` | `Skill(dispatch)` — it reads `## Handoff` itself, lands when green, and `/land` ships |
+| `both` | `Skill(dispatch)` — it reads `## Handoff` itself and lands when green; the operator ships |
 | `dispatch` | `Skill(dispatch)` |
 | `deliver` | `Skill(dispatch)` — the foreground variant; still a worktree |
 | `nothing` | nothing. Say the plan is ready and stop. |

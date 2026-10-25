@@ -165,8 +165,11 @@ costs a landing conflict, which is worse than having run them one after the othe
 Every proposed pull is handed back as a line the operator can paste unedited:
 
 ```
-/intent <what changes, in product terms, one sentence> — <pool path> <subsection> "<item's bold title, verbatim>"
+/intent --approved <what changes, in product terms, one sentence> — <pool path> <subsection> "<item's bold title, verbatim>"
 ```
+
+- `--approved` because the operator approves the pull by pasting it: `/intent` then asks nothing and
+  dispatches at once (its §0b). Leave it off only for an item §5e says still owes a decision.
 
 - The **pool path + subsection + verbatim title** are how `/intent` finds the full item text. Never
   paste the item's paragraph into the line; `/intent` reads it from the pool.

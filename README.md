@@ -115,8 +115,10 @@ It names, in whatever headings suit you:
 - **Branch namespace** (default `wt`).
 - **max_parallel_runs** (default 5) — how many dispatched runs may work at once across every cockpit
   in the repo; `/dispatch` queues the rest.
-- **Deploy commands** — `/deliver` never runs them; `/land` runs them only when the operator answers
-  Yes to its closing "Deploy?" question.
+- **Deploy commands** — `/deliver` never runs them; `/land` runs them after a green landing when the
+  plan's `## Handoff` is `ship` (the `/intent` default), or when the operator answers Yes to its
+  closing "Deploy?" question (`both`). The script's own stops (a pending migration, an env change)
+  are asked once, never decided.
 - **Protected files** — secret/env files a run must stop before touching.
 - **Model policy** — implementation model and effort, the escalation after repeated red gates, and the
   review effort for sensitive areas.
@@ -137,7 +139,7 @@ that.
 
 Put it where the declaration says. `/intent` fills it, `/deliver` appends to it, `/land` routes on it,
 so it needs these sections: `Context`, `Intent`, `Your calls`, `Agent's calls`, `Canon sections`,
-`Where it runs`, `Model policy`, `Handoff` (with an `Auto: **<nothing | dispatch | deliver | both>**`
+`Where it runs`, `Model policy`, `Handoff` (with an `Auto: **<nothing | dispatch | deliver | both | ship>**`
 line), `Slices` (each with `- Files:` and a `[verify]` command), `Gates`, `Out of scope` (items marked
 `[boundary]` or `[gap]`), `Decisions (agent-made)`, and `Not delivered` (entries tagged `[agent]` or
 `[operator]`). Under the title it carries the plan budget, `> Budget: ≤6 slices · ≤80 files — this
