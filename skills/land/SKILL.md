@@ -282,7 +282,10 @@ it ships on a clean exit and ends with its report on anything else.
 **Then the Done marker — the last call of the turn, in every outcome above.** One
 `AskUserQuestion`, header `Done`, question `<slug>: landed <hash> — shipped <targets>` (or
 `— nothing to ship` / `— not shipped: exit <code>`), one line per landing when there were several,
-options **OK** (first) / **Something's off** (free text). It decides nothing: the ship has already
+options **OK** (first) / **Archive** / **Something's off** (free text). **Archive** = archive this
+session: `get_session` with no `session_id` (claude-code-remote) gives its id, then
+`archive_session` on it as the turn's last call; when those tools are absent, say the session cannot
+archive itself and stop. It decides nothing: the ship has already
 happened, so an answer that comes tomorrow costs nothing. It exists because a question is what marks
 a session as *finished and waiting for you* in the app and triggers its notification — a reply that
 ends in prose looks the same as a cockpit mid-wait on a run (the operator used the old "Deploy?" as
