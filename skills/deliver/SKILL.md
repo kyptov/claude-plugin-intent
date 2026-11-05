@@ -122,6 +122,15 @@ regeneration steps for you, and tells you what its output needs committed with t
 declaration's gate table is documentation of what the script does, not a checklist for you to
 re-walk.
 
+**A gate that outlives the tool call is still the gate.** You are a background subagent, and the
+harness moves any shell command you run to the background after 3 minutes (Claude Code 2.1.318) —
+`gate.sh --full` and most test-bucket runs cross that line. The tool result then shows the output so
+far and says the command is still running; **that is not a verdict.** Do not read it as green, do
+not read it as red, do not start the next slice, do not re-run the gate: end your turn, the
+command's completion wakes you, and the exit code and the `VERDICT` line arrive with it (the script
+also leaves `deliver-state/<slug>/verdict`). Treat a gate you ran with `run_in_background: true`
+the same way. Nothing else in this skill changes: one gate, one wake, one verdict.
+
 Run the project's `preflight.sh` **once, before the first edit.** Its non-zero exits are setup facts
 you cannot fix by trying harder (no install, no synced env file, a sleeping test-database host): report
 the exit and stop, rather than implementing against a tree whose gates cannot mean anything. It also
