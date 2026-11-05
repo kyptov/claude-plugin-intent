@@ -260,7 +260,10 @@ When the declaration lists deploy commands and at least one landing exited 0, ru
 after the last landing you have in hand in this turn** (a no-argument `/land` lands several; a wave
 whose runs land minutes apart ships once at the end, and a run still building never holds the
 ship). Run the declaration's routine deploy command from the main checkout, in the background,
-with the target the landed diffs need — the declaration's "Deploy" section says how targets map to
+**with the declaration's additive-migration flag when it names one** (`pnpm ship <target>
+--migrate-additive` here: the script applies pending PROD migrations by itself when its classifier
+rates every one additive, and still stops on a DROP, DELETE, UPDATE, RENAME or type change — that
+stop is the question below), with the target the landed diffs need — the declaration's "Deploy" section says how targets map to
 paths; when it does not, run the default target. A landing that touches nothing the deploy ships
 (mobile-only, docs-only) ships nothing: say so.
 
@@ -279,17 +282,16 @@ Read the command's exit code, then:
 A `/land` running inside a background `/dispatch` subagent has no operator for the question above:
 it ships on a clean exit and ends with its report on anything else.
 
-**Then the Done marker — the last call of the turn, in every outcome above.** One
-`AskUserQuestion`, header `Done`, question `<slug>: landed <hash> — shipped <targets>` (or
-`— nothing to ship` / `— not shipped: exit <code>`), one line per landing when there were several,
-options **OK** (first) / **Archive** / **Something's off** (free text). **Archive** = archive this
-session: `get_session` with no `session_id` (claude-code-remote) gives its id, then
-`archive_session` on it as the turn's last call; when those tools are absent, say the session cannot
-archive itself and stop. It decides nothing: the ship has already
-happened, so an answer that comes tomorrow costs nothing. It exists because a question is what marks
-a session as *finished and waiting for you* in the app and triggers its notification — a reply that
-ends in prose looks the same as a cockpit mid-wait on a run (the operator used the old "Deploy?" as
-exactly this marker). Skip it only inside a background `/dispatch` subagent, where nobody answers.
+**Then the Done marker — the last two calls of the turn, in every outcome above, and no
+question.** One `PushNotification` `<slug>: landed <hash> — shipped <targets>` (or `— nothing to
+ship` / `— not shipped: exit <code>`), one line per landing when there were several; then
+`set_session_title` (claude-code-remote, on `get_session`'s own id) to the same line, so the
+session list reads the outcome without opening it; when those tools are absent, the notification
+alone. End the turn on that line of prose. *(supersedes the `Done` AskUserQuestion: 87 of them in
+the ten days to 2026-11-05, 97% answered with the first option, each holding a session open for the
+click — the title is the marker now, and the operator archives from the app.)* A reply that ends
+in prose after this marker is fine: the session is finished, not waiting. Inside a background
+`/dispatch` subagent, the notification only.
 
 ### 8b. `both` — ask "Deploy?"
 

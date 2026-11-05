@@ -250,7 +250,7 @@ same turn and `/land`'s line says how it ended.
 event (`RED`, `BLOCKED`, `Timed out`), question = the line itself plus the two or three facts a
 decision needs, options the real choices with the recommended one first. A question is what marks the
 session as finished-and-waiting in the app; a reply that ends in text is indistinguishable from a
-cockpit still waiting on a run. `/land` §8a's `Done` question is the same marker for the green path. Never on a slice, a wave start, or a wait that is still going.
+cockpit still waiting on a run. `/land` §8a ends the green path with its push line and the session title, not a question. Never on a slice, a wave start, or a wait that is still going.
 
 ## 5. Then land
 

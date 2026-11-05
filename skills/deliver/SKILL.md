@@ -32,14 +32,22 @@ report: it reaches the cockpit as your completion notification, and nobody else 
 ## 0b. Refuse to run outside a worktree — check this first
 
 ```sh
-[ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ] || exit
+git rev-parse --git-dir
+git rev-parse --git-common-dir
 ```
 
-If those two paths are equal you are in the **main checkout**, not a worktree. **Stop immediately.** Do
-not implement a single line. Say so and tell the operator to dispatch the plan properly, which creates
-the worktree for you.
+Two plain commands, each on its own, run from where you are. If the two paths are equal you are in
+the **main checkout**, not a worktree. **Stop immediately.** Do not implement a single line. Say so
+and tell the operator to dispatch the plan properly, which creates the worktree for you.
 
-This is one git command and it is not negotiable. Plans are never delivered in the main checkout:
+**Your cwd is already the worktree — never prefix `cd /…/<worktree>;` to a command, never chain git
+with anything else, and make source edits with `Edit`/`Write`, not a python or `cat` heredoc.** The
+harness's worktree-isolation guard refuses a `cd <worktree>; git …` compound and any heredoc as "too
+complex to verify it stays inside the worktree"; measured over the ten days to 2026-11-05, 400 such
+refusals across 17 runs, up to 45 in one run, each a wasted turn. The cockpit's absolute-path rule
+is for a cockpit reaching into a worktree from the main checkout; it does not apply to you.
+
+This check is not negotiable. Plans are never delivered in the main checkout:
 concurrency is global, so several runs can each see an empty room and interleave their features into
 one unreviewable working tree.
 
