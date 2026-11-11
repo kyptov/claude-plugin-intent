@@ -26,11 +26,21 @@ the cockpit cheap is keeping it plan-sized (never implementing here) and, when c
 separate `claude --model sonnet` cockpit for dispatch and land, with interviews (`/intent`) in an
 Opus session that hands it the plan.
 
-**The cockpit runs in `bypassPermissions` mode.** A run is a subagent of this session and inherits its
-permission mode, so in any other mode the run's first permission prompt surfaces here and parks the
-run until someone answers it — an unattended run that is not unattended. If this session is not in
-`bypassPermissions`, say so and stop before dispatching. Blast radius is the worktree, not the mode:
-`/deliver` forbids deploy and any production-destructive action the plan did not authorise.
+**A run never waits on a permission prompt.** A run is a subagent of this session and inherits its
+permission mode, so a prompt it raises surfaces here and parks the run until someone answers it — an
+unattended run that is not unattended. Two setups keep it unattended:
+
+- **`bypassPermissions`** — nothing prompts.
+- **`acceptEdits` or `auto`, with `permissions.denyInsteadOfPrompting: true`** (Claude Code 2.1.319) —
+  a call that would prompt is denied and the run keeps going; `/deliver` §1 says what it does with a
+  denial. Read the setting with
+  `for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" .claude/settings.json .claude/settings.local.json; do [ -f "$f" ] && jq '.permissions.denyInsteadOfPrompting | select(. != null)' "$f"; done | tail -1`
+  — the last file that sets it wins; `true` is the only pass. In `default` mode every edit would be
+  denied, so the setting does not rescue it.
+
+Neither setup in force → say which one is missing and stop before dispatching. Blast radius is the
+worktree, not the mode: `/deliver` forbids deploy and any production-destructive action the plan did
+not authorise.
 
 ---
 

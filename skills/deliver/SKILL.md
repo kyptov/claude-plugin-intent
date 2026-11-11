@@ -109,6 +109,13 @@ by" must be a real instruction, not "revert the commit".
    rows that exist today. (A destructive action the plan *does* authorise: just do it.)
 2. **Secret rotation**, or any change to a secret/env file the project declaration marks as protected.
 3. **Three consecutive failed gate cycles on the same slice** after the escalation below.
+4. **A permission denial the slice cannot go green without.**
+
+**A permission denial is a fact, not a fork.** A cockpit running with
+`permissions.denyInsteadOfPrompting` turns every call that would have prompted into a denial. Never
+retry a denied call verbatim, and never route around it — another tool, a wrapper script, a copied
+binary all reach for the same permission. If the slice goes green without it, record the denied call
+in `## Not delivered` and keep going; if it cannot, that is stop reason 4.
 
 Stopping means: commit what is green, write the reason into `## Not delivered`, send one
 `PushNotification` under 200 characters naming the decision needed, and end. Never stop silently.
@@ -138,6 +145,12 @@ not read it as red, do not start the next slice, do not re-run the gate: end you
 command's completion wakes you, and the exit code and the `VERDICT` line arrive with it (the script
 also leaves `deliver-state/<slug>/verdict`). Treat a gate you ran with `run_in_background: true`
 the same way. Nothing else in this skill changes: one gate, one wake, one verdict.
+
+**A red wake carries the verdict, not the failure.** The completion notification shows only the
+start and end of output over 1,000 characters (Claude Code 2.1.321): the `VERDICT` line survives,
+the failing test in the middle does not. Read the failure from the command's output file — the path
+the notification names — through `grep` or `tail` (§5a rule 3), never by re-running the gate to see
+it again.
 
 Run the project's `preflight.sh` **once, before the first edit.** Its non-zero exits are setup facts
 you cannot fix by trying harder (no install, no synced env file, a sleeping test-database host): report

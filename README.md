@@ -55,9 +55,11 @@ An installed plugin is a cached copy and does not follow the repository: run
 `claude plugin update workflow@claude-plugin-intent` after each release, under the same
 `CLAUDE_CONFIG_DIR` as the install.
 
-**Run the cockpit in `bypassPermissions` mode.** A dispatched run is a subagent of the cockpit and
-inherits its permission mode; in any other mode the run parks on its first permission prompt.
-`/dispatch` refuses to start a run otherwise.
+**Run the cockpit so a run never waits on a permission prompt.** A dispatched run is a subagent of the
+cockpit and inherits its permission mode, so a prompt it raises parks it. Use `bypassPermissions`, or
+`acceptEdits`/`auto` with `"permissions": { "denyInsteadOfPrompting": true }` in settings (Claude Code
+2.1.319+) — a call that would prompt is then denied and the run reports it. `/dispatch` refuses to
+start a run otherwise.
 
 **The plugin installs `WorktreeCreate` and `WorktreeRemove` hooks** in every project where it is
 enabled: every `isolation: "worktree"` agent's worktree is built by the plugin, and torn down by it
